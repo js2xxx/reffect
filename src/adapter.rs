@@ -2,7 +2,11 @@ mod catch;
 mod handle;
 mod transform;
 
-use core::{convert::Infallible, ops::CoroutineState::*, pin::pin};
+use core::{
+    convert::Infallible,
+    ops::{Coroutine, CoroutineState::*},
+    pin::pin,
+};
 
 use tuple_list::Tuple;
 
@@ -37,6 +41,13 @@ where
     E::TupleList: EffectList,
     ResumeTuple<E>: TupleSum,
 {
+    fn run(self) -> <Self as Coroutine<Sum<ResumeTuple<(Infallible,)>>>>::Return
+    where
+        Self: Effectful + Coroutine<Sum<ResumeTuple<(Infallible,)>>>,
+    {
+        run(self)
+    }
+
     fn handle<H, Markers>(self, handler: H) -> Handle<Self, H, Markers> {
         handle(self, handler)
     }

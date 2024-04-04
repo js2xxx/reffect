@@ -1,3 +1,6 @@
+#![allow(internal_features)]
+#![feature(allow_internal_unstable)]
+
 mod block;
 mod expr;
 mod func;
@@ -49,12 +52,14 @@ impl syn::visit_mut::VisitMut for DesugarExpr {
 }
 
 #[proc_macro]
+#[allow_internal_unstable(coroutine_trait, coroutines)]
 pub fn effectful_block(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let block = parse_macro_input!(input as block::EffectfulBlock);
     block::expand_block(block).into()
 }
 
 #[proc_macro_attribute]
+#[allow_internal_unstable(coroutine_trait, coroutines)]
 pub fn effectful(
     args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,

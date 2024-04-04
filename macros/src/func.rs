@@ -52,7 +52,7 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
     DesugarExpr { is_static: is_static.is_some() }.visit_block_mut(&mut block);
     item.block = parse_quote! {
         {
-            #is_static |_: #resume_types| {
+            #is_static move |_: #resume_types| {
                 #move_args
                 #block
             }

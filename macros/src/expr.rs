@@ -24,7 +24,7 @@ pub(crate) fn expand_await(span: Span, expr: &Expr, is_static: bool) -> Expr {
 
     parse_quote! {
         (match (
-            reffect::traits::IntoCoroutine::into_coroutine(#expr),
+            reffect::IntoCoroutine::into_coroutine(#expr),
             reffect::util::Sum::new(<core::convert::Infallible as reffect::Effect>::tag(
                 reffect::adapter::Begin,
             )),
