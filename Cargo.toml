@@ -1,0 +1,14 @@
+[package]
+edition = "2021"
+name = "reffect"
+version = "0.1.0"
+
+[dependencies]
+reffect-macros = {path = "macros"}
+
+pin-project = "1.1"
+tuple_list = "0.1"
+
+[workspace]
+members = ["macros"]
+resolver = "2"
