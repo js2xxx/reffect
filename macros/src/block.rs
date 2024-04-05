@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{parse::Parse, parse_quote, visit_mut::VisitMut, Attribute, Stmt};
+use syn::{parse::Parse, visit_mut::VisitMut, Attribute, Stmt};
 
 use crate::{Args, DesugarExpr};
 
@@ -38,8 +38,7 @@ pub(crate) fn expand_block(block: EffectfulBlock) -> TokenStream {
         .iter_mut()
         .for_each(|stmt| DesugarExpr { is_static: is_static.is_some() }.visit_stmt_mut(stmt));
 
-    let effects = effects.into_iter();
-    let resume_types: syn::Type = parse_quote!(reffect::Resumes![#(#effects),*]);
+    let resume_types = crate::expr::expand_resume(effects);
 
     quote! {
         #is_static #is_move |_: #resume_types| {

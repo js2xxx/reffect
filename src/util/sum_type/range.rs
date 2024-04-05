@@ -1,4 +1,4 @@
-use super::repr::*;
+use super::repr::{Split, SumList};
 use crate::util::tag::{Tag, UInt, UTerm};
 
 pub trait Count {

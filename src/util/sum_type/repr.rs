@@ -3,12 +3,9 @@ use core::{mem::ManuallyDrop, ptr};
 use super::range::Count;
 use crate::util::tag::{Tag, UInt, UTerm};
 
-#[doc(hidden)]
 pub struct Nil;
 
-#[doc(hidden)]
 #[repr(C)]
-#[derive(Clone, Copy)]
 pub union Cons<T, U> {
     pub(super) data: ManuallyDrop<T>,
     pub(super) next: ManuallyDrop<U>,
@@ -18,7 +15,6 @@ pub trait SumList: Count {
     type Repr;
     type Tags<U>;
 
-    #[doc(hidden)]
     unsafe fn drop(this: &mut ManuallyDrop<Self::Repr>, tag: u8);
 }
 
@@ -46,25 +42,19 @@ where
 }
 
 pub trait Split<T, U: Tag>: SumList {
-    #[doc(hidden)]
     fn from_data(data: T) -> Self::Repr;
 
-    #[doc(hidden)]
     unsafe fn into_data_unchecked(this: Self::Repr) -> T;
 
-    #[doc(hidden)]
     fn as_ptr(this: &Self::Repr) -> *const T;
 
-    #[doc(hidden)]
     fn as_mut_ptr(this: &mut Self::Repr) -> *mut T;
 
     type Remainder: SumList;
     type Substitute<T2>: Split<T2, U>;
 
-    #[doc(hidden)]
     fn from_remainder(tag: u8) -> u8;
 
-    #[doc(hidden)]
     fn try_unwrap(tag: u8) -> Result<(), u8>;
 }
 

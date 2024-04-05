@@ -17,8 +17,7 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
         effects.insert(1, parse_quote!(reffect::future::Await));
     }
 
-    let ei = effects.iter();
-    let resume_types: syn::Type = parse_quote!(reffect::Resumes![#(#ei),*]);
+    let resume_types = crate::expr::expand_resume(&effects);
 
     let iter = item.sig.inputs.iter_mut().enumerate().map(|(i, arg)| {
         let substitute = format_ident!("arg{}", i);
@@ -45,9 +44,10 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
         syn::ReturnType::Default => parse_quote!(()),
         syn::ReturnType::Type(_, ty) => ty,
     };
-    let ei = effects.iter();
+
+    let list = crate::expr::expand_effect(&effects);
     item.sig.output = parse_quote! {
-        -> impl reffect::Effectful<reffect::Sum![@FORWARD #(#ei,)*], Return = #output>
+        -> impl reffect::Effectful<#list, Return = #output>
     };
 
     let mut block = item.block;

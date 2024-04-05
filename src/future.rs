@@ -8,7 +8,11 @@ use core::{
 
 use pin_project::pin_project;
 
-use crate::{effect::IntoCoroutine, util::Sum, Effect, Effectful, Effects, Resumes};
+use crate::{
+    effect::{EffectExt, IntoCoroutine},
+    util::Sum,
+    Effect, Effectful, Effects, Resumes,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Await;

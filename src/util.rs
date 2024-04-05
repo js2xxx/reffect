@@ -3,12 +3,12 @@ pub mod tag;
 
 use core::{any::type_name, marker::PhantomData};
 
+pub use self::sum_type::{range::ConcatList, umap, Sum};
 use self::sum_type::{range::SplitList, repr::SumList};
-pub use self::sum_type::{umap, Sum};
 use crate::{
     adapter::Begin,
     effect::{EffectList, ResumeTy},
-    Effect, Sum,
+    Effect,
 };
 
 pub fn mark<T: ?Sized>(_: &T) -> PhantomData<T> {
@@ -19,7 +19,7 @@ pub fn type_name_of_marker<T: ?Sized>(_: PhantomData<T>) -> &'static str {
     type_name::<T>()
 }
 
-pub fn untag_effect<T: Effect>(r: Sum![ResumeTy<T>], _: PhantomData<(T, ())>) -> T::Resume {
+pub fn untag_effect<T: Effect>(r: Sum<(ResumeTy<T>, ())>, _: PhantomData<(T, ())>) -> T::Resume {
     Sum::into_inner(r).untag()
 }
 

@@ -15,12 +15,12 @@ use crate::{
     util::{
         narrow_effect_prefixed,
         sum_type::{
-            range::{ConcatList, ContainsList, Count, SplitList},
+            range::{ContainsList, Count, SplitList},
             repr::SumList,
             NarrowRem,
         },
         tag::{UTerm, U1},
-        Sum,
+        ConcatList, Sum,
     },
 };
 

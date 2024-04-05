@@ -1,6 +1,6 @@
 mod derive;
-pub mod range;
-pub mod repr;
+pub(crate) mod range;
+pub(crate) mod repr;
 
 use core::{
     fmt,

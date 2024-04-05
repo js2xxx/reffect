@@ -1,5 +1,54 @@
+use std::borrow::Borrow;
+
 use proc_macro2::Span;
-use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Expr, Ident, Pat, Stmt};
+use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Expr, Ident, Pat, Stmt, Type};
+
+fn concat_list<P>(effects: impl IntoIterator<Item = P>) -> Type
+where
+    P: Borrow<Type>,
+{
+    effects.into_iter().fold(parse_quote!(()), |acc, path| {
+        let path = path.borrow();
+        let concat_list: Type = parse_quote! {
+            reffect::util::ConcatList<#path>
+        };
+        parse_quote! {
+            <#acc as #concat_list>::Output
+        }
+    })
+}
+
+pub(crate) fn expand_effect<P>(effects: impl IntoIterator<Item = P>) -> Type
+where
+    P: Borrow<Type>,
+{
+    let list = effects.into_iter().map(|path| {
+        let path = path.borrow();
+        let path: Type = parse_quote! { <#path as reffect::effect::EffectGroup>::Effects };
+        path
+    });
+    concat_list(list)
+}
+
+pub(crate) fn expand_resume<P>(effects: impl IntoIterator<Item = P>) -> Type
+where
+    P: Borrow<Type>,
+{
+    let resume_ty = effects.into_iter().map(|path| {
+        let path = path.borrow();
+        let path: Type = parse_quote! {
+            <
+                <#path as reffect::effect::EffectGroup>::Effects
+                    as reffect::effect::EffectList
+            >::ResumeList
+        };
+        path
+    });
+    let list = concat_list(resume_ty);
+    parse_quote! {
+        reffect::util::Sum<(reffect::adapter::Begin, #list)>
+    }
+}
 
 pub(crate) fn expand_await(span: Span, expr: &Expr, is_static: bool) -> Expr {
     let full_span = span.join(expr.span()).unwrap();

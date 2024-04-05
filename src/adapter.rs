@@ -16,12 +16,11 @@ use crate::{
     effect::{EffectList, Effectful},
     util::{
         sum_type::{
-            range::{ConcatList, ContainsList, SplitList},
+            range::{ContainsList, SplitList},
             NarrowRem,
         },
-        Sum,
+        ConcatList, Sum,
     },
-    Sum,
 };
 
 #[derive(Debug)]
@@ -35,9 +34,9 @@ pub fn run<Coro: Effectful>(coro: Coro) -> Coro::Return {
 }
 
 pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
-    fn run(self) -> <Self as Coroutine<Sum![Begin]>>::Return
+    fn run(self) -> <Self as Coroutine<Sum<(Begin, ())>>>::Return
     where
-        Self: Effectful + Coroutine<Sum![Begin]>,
+        Self: Effectful + Coroutine<Sum<(Begin, ())>>,
     {
         run(self)
     }
@@ -110,8 +109,11 @@ mod test {
 
     use super::{Begin, EffectfulExt};
     use crate::{
-        self as reffect, effect::ResumeTy, effectful, effectful_block, util::Sum, Effect,
-        Effectful, Effects, List, Resumes, Sum,
+        self as reffect,
+        effect::{EffectExt, ResumeTy},
+        effectful, effectful_block,
+        util::Sum,
+        Effect, EffectList, Effectful, Effects, Resumes, Sum,
     };
 
     struct Eff1(u32);
@@ -134,7 +136,7 @@ mod test {
         (yield Eff1(1)) as i16
     }
 
-    fn a2() -> impl Effectful<List![Eff2], Return = i16> {
+    fn a2() -> impl Effectful<EffectList![Eff2], Return = i16> {
         effectful_block! {
             #![effectful(Eff2)]
             (yield Eff2(true)) as i16
@@ -172,7 +174,7 @@ mod test {
 
         let coro = coro.transform0(|eff: Effects![Eff2]| {
             move |_: Resumes![Eff2]| {
-                let sum = yield eff.broaden::<List![Eff2], _>();
+                let sum = yield eff.broaden::<EffectList![Eff2], _>();
                 sum.narrow::<(ResumeTy<Eff2>, ()), _>().unwrap()
             }
         });

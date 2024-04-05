@@ -12,7 +12,7 @@ use syn::{parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Span
 struct Args {
     is_static: Option<Token![static]>,
     is_move: Option<Token![move]>,
-    effects: Punctuated<syn::Ident, Token![,]>,
+    effects: Punctuated<syn::Type, Token![,]>,
 }
 
 impl Parse for Args {
@@ -30,7 +30,7 @@ impl Parse for Args {
         if is_static.is_some() || is_move.is_some() {
             input.parse::<Token![;]>()?;
         }
-        let effects = input.parse_terminated(syn::Ident::parse, Token![,])?;
+        let effects = input.parse_terminated(syn::Type::parse, Token![,])?;
         Ok(Args { is_static, is_move, effects })
     }
 }
@@ -50,6 +50,23 @@ impl syn::visit_mut::VisitMut for DesugarExpr {
             }
             _ => syn::visit_mut::visit_expr_mut(self, i),
         }
+    }
+}
+
+#[proc_macro]
+#[allow(non_snake_case)]
+pub fn EffectList(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    fn parse_effects(
+        input: syn::parse::ParseStream,
+    ) -> syn::Result<Punctuated<syn::Type, Token![,]>> {
+        input.parse_terminated(syn::Type::parse, Token![,])
+    }
+    match syn::parse::Parser::parse(parse_effects, input) {
+        Ok(effects) => {
+            let expand_effect = crate::expr::expand_effect(effects);
+            expand_effect.into_token_stream().into()
+        }
+        Err(e) => e.to_compile_error().into(),
     }
 }
 
@@ -75,7 +92,7 @@ pub fn effectful(
 pub fn do_await(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let expr = parse_macro_input!(input as syn::Expr);
     let expand_await = crate::expr::expand_await(Span::call_site(), &expr, false);
-    expand_await.to_token_stream().into()
+    expand_await.into_token_stream().into()
 }
 
 #[proc_macro]
@@ -86,5 +103,5 @@ pub fn do_yield(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         None
     };
     let expand_yield = crate::expr::expand_yield(Span::call_site(), expr);
-    expand_yield.to_token_stream().into()
+    expand_yield.into_token_stream().into()
 }

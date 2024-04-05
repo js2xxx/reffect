@@ -10,7 +10,9 @@ use crate::{
 
 pub trait Effect {
     type Resume;
+}
 
+pub trait EffectExt: Effect {
     fn tag(r: Self::Resume) -> ResumeTy<Self> {
         ResumeTy(r)
     }
@@ -18,6 +20,16 @@ pub trait Effect {
     fn untag(rt: ResumeTy<Self>) -> Self::Resume {
         rt.0
     }
+}
+
+impl<E: Effect> EffectExt for E {}
+
+pub trait EffectGroup {
+    type Effects;
+}
+
+impl<E: Effect> EffectGroup for E {
+    type Effects = (E, ());
 }
 
 #[macro_export]
