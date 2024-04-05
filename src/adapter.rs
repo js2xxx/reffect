@@ -131,15 +131,10 @@ mod test {
         type Resume = u32;
     }
 
-    #[effectful(Eff1)]
-    fn a1() -> i16 {
-        (yield Eff1(1)) as i16
-    }
-
-    fn a2() -> impl Effectful<EffectList![Eff2], Return = i16> {
+    fn a1() -> impl Effectful<EffectList![Eff1], Return = i16> {
         effectful_block! {
-            #![effectful(Eff2)]
-            (yield Eff2(true)) as i16
+            #![effectful(Eff1)]
+            (yield Eff1(1)) as i16
         }
     }
 
@@ -160,7 +155,13 @@ mod test {
     #[effectful(Eff1, Eff2)]
     fn b() -> i16 {
         Empty.await;
-        a1().await + a2().await
+
+        let a2 = effectful_block! {
+            #![effectful(Eff2)]
+            (yield Eff2(true)) as i16
+        };
+
+        a1().await + a2.await
     }
 
     #[test]

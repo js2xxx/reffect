@@ -36,18 +36,25 @@ impl Parse for Args {
     }
 }
 
-struct DesugarExpr {
+struct DesugarExpr<'a> {
     is_static: bool,
+    effect_list: &'a syn::Type,
 }
 
-impl syn::visit_mut::VisitMut for DesugarExpr {
+impl syn::visit_mut::VisitMut for DesugarExpr<'_> {
     fn visit_expr_mut(&mut self, i: &mut syn::Expr) {
         match i {
             syn::Expr::Await(syn::ExprAwait { base, await_token, .. }) => {
-                *i = crate::expr::expand_await(await_token.span, base, self.is_static)
+                *i = crate::expr::expand_await(
+                    await_token.span,
+                    base,
+                    self.is_static,
+                    Some(self.effect_list),
+                )
             }
             syn::Expr::Yield(syn::ExprYield { yield_token, expr, .. }) => {
-                *i = crate::expr::expand_yield(yield_token.span, expr.take())
+                *i =
+                    crate::expr::expand_yield(yield_token.span, expr.take(), Some(self.effect_list))
             }
             _ => syn::visit_mut::visit_expr_mut(self, i),
         }
@@ -92,7 +99,7 @@ pub fn effectful(
 #[proc_macro]
 pub fn do_await(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let expr = parse_macro_input!(input as syn::Expr);
-    let expand_await = crate::expr::expand_await(Span::call_site(), &expr, false);
+    let expand_await = crate::expr::expand_await(Span::call_site(), &expr, false, None);
     expand_await.into_token_stream().into()
 }
 
@@ -103,6 +110,6 @@ pub fn do_yield(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     } else {
         None
     };
-    let expand_yield = crate::expr::expand_yield(Span::call_site(), expr);
+    let expand_yield = crate::expr::expand_yield(Span::call_site(), expr, None);
     expand_yield.into_token_stream().into()
 }

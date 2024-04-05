@@ -39,9 +39,15 @@ pub(crate) fn expand_block(block: EffectfulBlock) -> TokenStream {
     } = block;
     let Args { is_static, is_move, effects } = args;
 
-    stmts
-        .iter_mut()
-        .for_each(|stmt| DesugarExpr { is_static: is_static.is_some() }.visit_stmt_mut(stmt));
+    let effect_list = crate::expr::expand_effect(&effects);
+
+    stmts.iter_mut().for_each(|stmt| {
+        DesugarExpr {
+            is_static: is_static.is_some(),
+            effect_list: &effect_list,
+        }
+        .visit_stmt_mut(stmt)
+    });
 
     let resume_types = crate::expr::expand_resume(effects);
 

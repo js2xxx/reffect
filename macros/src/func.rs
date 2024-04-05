@@ -45,13 +45,19 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
         syn::ReturnType::Type(_, ty) => ty,
     };
 
-    let list = crate::expr::expand_effect(&effects);
+    let effect_list = crate::expr::expand_effect(&effects);
     item.sig.output = parse_quote! {
-        -> impl reffect::Effectful<#list, Return = #output>
+        -> impl reffect::Effectful<#effect_list, Return = #output>
     };
 
     let mut block = *item.block;
-    DesugarExpr { is_static: is_static.is_some() }.visit_block_mut(&mut block);
+    
+    DesugarExpr {
+        is_static: is_static.is_some(),
+        effect_list: &effect_list,
+    }
+    .visit_block_mut(&mut block);
+
     *item.block = parse_quote! {
         {
             #is_static move |_: #resume_types| {

@@ -1,7 +1,9 @@
 use std::borrow::Borrow;
 
 use proc_macro2::Span;
-use syn::{parse_quote, parse_quote_spanned, spanned::Spanned, Expr, Ident, Pat, Stmt, Type};
+use syn::{
+    parse_quote, parse_quote_spanned, spanned::Spanned, Expr, Ident, Pat, Stmt, Token, Type,
+};
 
 fn concat_list<P>(effects: impl IntoIterator<Item = P>) -> Type
 where
@@ -50,7 +52,17 @@ where
     }
 }
 
-pub(crate) fn expand_await(span: Span, expr: &Expr, is_static: bool) -> Expr {
+pub(crate) fn expand_await(
+    span: Span,
+    expr: &Expr,
+    is_static: bool,
+    effect_list: Option<&Type>,
+) -> Expr {
+    let inferred = syn::Type::Infer(syn::TypeInfer {
+        underscore_token: <Token![_]>::default(),
+    });
+    let effect_list = effect_list.unwrap_or(&inferred);
+
     let full_span = span.join(expr.span()).unwrap();
 
     let awaitee = Ident::new("__awaitee", Span::call_site());
@@ -95,7 +107,7 @@ pub(crate) fn expand_await(span: Span, expr: &Expr, is_static: bool) -> Expr {
                     };
                     let eff_marker = eff.type_marker();
                     state = reffect::util::narrow_effect_prefixed(
-                        yield eff.broaden(),
+                        yield eff.broaden::<#effect_list, _>(),
                         eff_marker,
                     );
                 }
@@ -104,13 +116,22 @@ pub(crate) fn expand_await(span: Span, expr: &Expr, is_static: bool) -> Expr {
     }
 }
 
-pub(crate) fn expand_yield(span: Span, expr: Option<Box<Expr>>) -> Expr {
+pub(crate) fn expand_yield(
+    span: Span,
+    expr: Option<Box<Expr>>,
+    effect_list: Option<&Type>,
+) -> Expr {
+    let inferred = syn::Type::Infer(syn::TypeInfer {
+        underscore_token: <Token![_]>::default(),
+    });
+    let effect_list = effect_list.unwrap_or(&inferred);
+
     let token = syn::token::Yield { span };
     let expr = expr.unwrap_or_else(|| parse_quote_spanned! { span => () });
     parse_quote! {{
         let eff = reffect::util::Sum::from(#expr);
         let marker = eff.type_marker();
-        let r = reffect::util::narrow_effect(#token eff.broaden(), marker);
+        let r = reffect::util::narrow_effect(#token eff.broaden::<#effect_list, _>(), marker);
         reffect::util::untag_effect(r, marker)
     }}
 }
