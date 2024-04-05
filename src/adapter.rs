@@ -15,10 +15,9 @@ pub use self::{
 use crate::{
     util::{
         sum_type::{
-            range::{ContainsList, SplitList},
+            range::{ConcatList, ContainsList, SplitList},
             NarrowRem,
         },
-        tuple::ConcatList,
         Sum,
     },
     EffectList, Effectful, Sum,

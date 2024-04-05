@@ -16,7 +16,7 @@ pub mod util;
 #[cfg(test)]
 extern crate std;
 
-pub use reffect_macros::{effectful, effectful_block};
+pub use reffect_macros::{do_await, do_yield, effectful, effectful_block};
 
 pub use self::traits::*;
 

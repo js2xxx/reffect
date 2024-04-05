@@ -5,6 +5,8 @@ mod block;
 mod expr;
 mod func;
 
+use proc_macro2::Span;
+use quote::ToTokens;
 use syn::{parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Token};
 
 struct Args {
@@ -67,4 +69,22 @@ pub fn effectful(
     let args = parse_macro_input!(args as Args);
     let input = parse_macro_input!(input as syn::ItemFn);
     func::expand_func(args, input).into()
+}
+
+#[proc_macro]
+pub fn do_await(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let expr = parse_macro_input!(input as syn::Expr);
+    let expand_await = crate::expr::expand_await(Span::call_site(), &expr, false);
+    expand_await.to_token_stream().into()
+}
+
+#[proc_macro]
+pub fn do_yield(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let expr = if !input.is_empty() {
+        Some(parse_macro_input!(input as Box<syn::Expr>))
+    } else {
+        None
+    };
+    let expand_yield = crate::expr::expand_yield(Span::call_site(), expr);
+    expand_yield.to_token_stream().into()
 }

@@ -16,6 +16,38 @@ where
     type Count = UInt<Tail::Count>;
 }
 
+pub trait Concat<T> {
+    type Output;
+}
+
+impl<T> Concat<T> for () {
+    type Output = (T, ());
+}
+
+impl<Head, Tail, T> Concat<T> for (Head, Tail)
+where
+    Tail: Concat<T>,
+{
+    type Output = (Head, <Tail as Concat<T>>::Output);
+}
+
+pub trait ConcatList<TList> {
+    type Output;
+}
+
+impl<T> ConcatList<()> for T {
+    type Output = T;
+}
+
+impl<Head, Tail, T> ConcatList<(Head, Tail)> for T
+where
+    T: Concat<Head>,
+    T::Output: ConcatList<Tail>,
+{
+    type Output = <T::Output as ConcatList<Tail>>::Output;
+}
+
+
 pub trait SplitList<TList: SumList, UList>: SumList {
     type Remainder: SumList;
 

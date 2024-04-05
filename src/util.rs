@@ -1,6 +1,5 @@
 pub mod sum_type;
 pub mod tag;
-pub(crate) mod tuple;
 
 use core::{any::type_name, marker::PhantomData};
 
@@ -53,35 +52,4 @@ where
     R: SplitList<(Begin, E::ResumeList), UL>,
 {
     narrow_effect_impl(r, marker)
-}
-
-#[macro_export]
-macro_rules! do_yield {
-    ($eff:expr) => {{
-        let eff = $crate::util::Sum::from($eff);
-        let marker = eff.type_marker();
-        let r = $crate::util::narrow_effect(yield eff.broaden(), marker);
-        $crate::util::untag_effect(r, marker)
-    }};
-}
-
-#[macro_export]
-macro_rules! do_await {
-    ($e:expr) => {{
-        use core::ops::{Coroutine, CoroutineState::*};
-        let mut coro = $crate::traits::IntoCoroutine::into_coroutine($e);
-
-        let mut state = $crate::util::Sum::new(<core::convert::Infallible as $crate::Effect>::tag(
-            $crate::adapter::Begin,
-        ));
-        loop {
-            // SAFETY: `coro` won't be moved.
-            let eff = match unsafe { core::pin::Pin::new_unchecked(&mut coro) }.resume(state) {
-                Yielded(eff) => eff,
-                Complete(ret) => break ret,
-            };
-            let eff_marker = eff.type_marker();
-            state = $crate::util::narrow_effect(yield eff.broaden(), eff_marker);
-        }
-    }};
 }
