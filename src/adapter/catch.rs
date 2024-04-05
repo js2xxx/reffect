@@ -14,13 +14,15 @@ use crate::{
     adapter::Begin,
     traits::IntoCoroutine,
     util::{
-        narrow_effect_prefixed, sum_type::{
+        narrow_effect_prefixed,
+        sum_type::{
             range::{TupleBirange, TupleRange},
-            repr::TupleSum,
             NarrowRem,
-        }, tag::U1, Sum
+        },
+        tag::U1,
+        Sum,
     },
-    EffectList, PrefixedResumeList,
+    EffectList,
 };
 
 pub fn catch<Coro, Trans, H, MTypes, MULists>(
@@ -45,49 +47,42 @@ pub struct Catch<Coro, Trans, H, MTypes, MULists> {
     markers: PhantomData<(MTypes, MULists)>,
 }
 
-impl<Coro, Trans, Y, T, E, H, HY, OY, EUL, RemEUL, HOYUL, OYUL, HORUL, ORUL>
-    Coroutine<Sum<PrefixedResumeList<OY>>>
-    for Catch<Coro, Trans, H, (Y, E, HY, OY), (EUL, RemEUL, HOYUL, OYUL, HORUL, ORUL)>
+impl<Coro, Trans, Y, T, E, H, HY, OY, EUL, RemEUL, HOUL, OUL>
+    Coroutine<Sum<(Begin, OY::ResumeList)>>
+    for Catch<Coro, Trans, H, (Y, E, HY, OY), (EUL, RemEUL, HOUL, OUL)>
 where
-    Coro: Coroutine<Sum<PrefixedResumeList<Y>>, Yield = Sum<Y>, Return = T>,
+    Coro: Coroutine<Sum<(Begin, Y::ResumeList)>, Yield = Sum<Y>, Return = T>,
     Trans: FnMut(Sum<E>) -> H,
     H: Coroutine<
-        Sum<PrefixedResumeList<HY>>,
+        Sum<(Begin, HY::ResumeList)>,
         Yield = Sum<HY>,
         Return = ControlFlow<T, Sum<E::ResumeList>>,
     >,
 
     E: EffectList,
-
-    PrefixedResumeList<Y>: TupleSum,
     Y: EffectList,
-
-    PrefixedResumeList<HY>: TupleSum,
     HY: EffectList,
-
-    PrefixedResumeList<OY>: TupleSum,
     OY: EffectList,
-
     NarrowRem<Y, E, EUL>: EffectList<ResumeList = NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
 
-    Y: TupleRange<E, EUL>,
+    Y: TupleBirange<E, EUL, RemEUL>,
     Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL>,
-    PrefixedResumeList<Y>: TupleRange<Y::ResumeList, Y::Tags<U1>>,
+    (Begin, Y::ResumeList): TupleRange<Y::ResumeList, Y::Tags<U1>>,
 
-    OY: TupleRange<HY, HOYUL> + TupleRange<NarrowRem<Y, E, EUL>, OYUL>,
-    OY::ResumeList: TupleRange<HY::ResumeList, HORUL>
-        + TupleRange<<NarrowRem<Y, E, EUL> as EffectList>::ResumeList, ORUL>,
+    OY: TupleRange<HY, HOUL> + TupleRange<NarrowRem<Y, E, EUL>, OUL>,
+    OY::ResumeList: TupleRange<HY::ResumeList, HOUL>
+        + TupleRange<NarrowRem<Y::ResumeList, E::ResumeList, EUL>, OUL>,
 {
     type Yield = Sum<OY>;
     type Return = T;
 
     fn resume(
         self: Pin<&mut Self>,
-        state: Sum<PrefixedResumeList<OY>>,
+        state: Sum<(Begin, OY::ResumeList)>,
     ) -> CoroutineState<Self::Yield, T> where {
         let mut proj = self.project();
 
-        let mut state: Sum<PrefixedResumeList<Y>> = match proj.handler.as_mut().as_pin_mut() {
+        let mut state: Sum<(Begin, Y::ResumeList)> = match proj.handler.as_mut().as_pin_mut() {
             Some(mut handler) => {
                 let state: Sum<Y::ResumeList> = match handler
                     .as_mut()

@@ -1,5 +1,20 @@
 use super::repr::*;
-use crate::util::tag::{Tag, UTerm};
+use crate::util::tag::{Tag, UInt, UTerm};
+
+pub trait TupleCount {
+    type Count: Tag;
+}
+
+impl TupleCount for () {
+    type Count = UTerm;
+}
+
+impl<Head, Tail> TupleCount for (Head, Tail)
+where
+    Tail: TupleCount,
+{
+    type Count = UInt<Tail::Count>;
+}
 
 pub trait TupleRange<TList: TupleSum, UList>: TupleSum {
     type Remainder: TupleSum;

@@ -10,11 +10,18 @@ use core::{
 pub use self::{
     catch::{catch, Catch},
     handle::{handle, Handle},
-    transform::{transform, transform0, transform1, Transform, Transform0},
+    transform::{transform, transform0, transform1, Transform, Transform0, Transform1},
 };
 use crate::{
-    util::{sum_type::repr::TupleSum, Sum},
-    EffectList, Effectful, PrefixedResumeList, Sum,
+    util::{
+        sum_type::{
+            range::{TupleBirange, TupleRange},
+            NarrowRem,
+        },
+        tuple::ConcatList,
+        Sum,
+    },
+    EffectList, Effectful, Sum,
 };
 
 #[derive(Debug)]
@@ -27,10 +34,7 @@ pub fn run<Coro: Effectful>(coro: Coro) -> Coro::Return {
     }
 }
 
-pub trait EffectfulExt<E: EffectList>: Effectful<E> + Sized
-where
-    PrefixedResumeList<E>: TupleSum,
-{
+pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
     fn run(self) -> <Self as Coroutine<Sum![Begin]>>::Return
     where
         Self: Effectful + Coroutine<Sum![Begin]>,
@@ -42,10 +46,52 @@ where
         handle(self, handler)
     }
 
+    fn catch<Trans, H, MTypes, MULists>(
+        self,
+        trans: Trans,
+    ) -> Catch<Self, Trans, H, MTypes, MULists> {
+        catch(self, trans)
+    }
+
     fn transform<Trans, H, MTypes, MULists>(
         self,
         trans: Trans,
     ) -> Transform<Self, Trans, H, MTypes, MULists> {
+        transform(self, trans)
+    }
+
+    fn transform0<Trans, E, H, HY, EUL, RemEUL, HUL>(
+        self,
+        trans: Trans,
+    ) -> Transform0<Self, Trans, H, Y, E, HY, EUL, RemEUL, HUL>
+    where
+        Trans: FnMut(Sum<E>) -> H,
+        H: Effectful<HY, Return = Sum<E::ResumeList>>,
+
+        E: EffectList,
+        HY: EffectList,
+
+        Y: EffectList + TupleBirange<E, EUL, RemEUL> + TupleRange<HY, HUL>,
+        Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL> + TupleRange<HY::ResumeList, HUL>,
+    {
+        transform(self, trans)
+    }
+
+    fn transform1<Trans, E, H, HY, EUL, RemEUL>(
+        self,
+        trans: Trans,
+    ) -> Transform1<Self, Trans, H, Y, E, HY, EUL, RemEUL>
+    where
+        Trans: FnMut(Sum<E>) -> H,
+        H: Effectful<HY, Return = Sum<E::ResumeList>>,
+
+        E: EffectList,
+        HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
+        HY::ResumeList: ConcatList<NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
+
+        Y: EffectList + TupleBirange<E, EUL, RemEUL>,
+        Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL>,
+    {
         transform(self, trans)
     }
 }
@@ -53,7 +99,6 @@ where
 impl<F, E> EffectfulExt<E> for F
 where
     E: EffectList,
-    PrefixedResumeList<E>: TupleSum,
     F: Effectful<E>,
 {
 }

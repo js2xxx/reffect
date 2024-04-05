@@ -6,7 +6,7 @@ use core::{any::type_name, marker::PhantomData};
 
 use self::sum_type::{range::TupleRange, repr::TupleSum};
 pub use self::sum_type::{umap, Sum};
-use crate::{Effect, EffectList, PrefixedResumeList, ResumeTy, Sum};
+use crate::{adapter::Begin, Effect, EffectList, ResumeTy, Sum};
 
 pub fn mark<T: ?Sized>(_: &T) -> PhantomData<T> {
     PhantomData
@@ -44,12 +44,13 @@ where
     narrow_effect_impl(r, marker)
 }
 
-pub fn narrow_effect_prefixed<R, E, UL>(r: Sum<R>, marker: PhantomData<E>) -> Sum<PrefixedResumeList<E>>
+pub fn narrow_effect_prefixed<R, E, UL>(
+    r: Sum<R>,
+    marker: PhantomData<E>,
+) -> Sum<(Begin, E::ResumeList)>
 where
-    PrefixedResumeList<E>: TupleSum,
     E: EffectList,
-
-    R: TupleRange<PrefixedResumeList<E>, UL>,
+    R: TupleRange<(Begin, E::ResumeList), UL>,
 {
     narrow_effect_impl(r, marker)
 }

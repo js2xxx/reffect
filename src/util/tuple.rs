@@ -49,8 +49,6 @@ where
     type Output = <T::Output as ConcatList<Tail>>::Output;
 }
 
-pub type ConcatT<A, B> = <A as ConcatList<B>>::Output;
-
 // pub trait Split<T, U> {
 //     type Output;
 

@@ -10,6 +10,7 @@ use core::{
 
 use pin_project::pin_project;
 
+use super::Begin;
 use crate::{
     util::{
         sum_type::{
@@ -19,7 +20,7 @@ use crate::{
         tag::U1,
         Sum,
     },
-    EffectList, PrefixedResumeList,
+    EffectList, Effectful,
 };
 
 pub fn handle<Coro, H, Markers>(coro: Coro, handler: H) -> Handle<Coro, H, Markers> {
@@ -39,11 +40,11 @@ pub struct Handle<Coro, H, Markers> {
     markers: PhantomData<Markers>,
 }
 
-impl<Coro, Y, T, H, E, RemUL, UL> Coroutine<Sum<PrefixedResumeList<NarrowRem<Y, E, UL>>>>
-    for Handle<Coro, H, (Y, T, E, RemUL, UL)>
+impl<Coro, Y, H, E, RemUL, UL> Coroutine<Sum<(Begin, NarrowRem<Y::ResumeList, E::ResumeList, UL>)>>
+    for Handle<Coro, H, (Y, E, RemUL, UL)>
 where
-    Coro: Coroutine<Sum<PrefixedResumeList<Y>>, Yield = Sum<Y>, Return = T>,
-    H: FnMut(Sum<E>) -> ControlFlow<T, Sum<E::ResumeList>>,
+    Coro: Effectful<Y>,
+    H: FnMut(Sum<E>) -> ControlFlow<Coro::Return, Sum<E::ResumeList>>,
 
     Y: EffectList,
     E: EffectList,
@@ -52,15 +53,15 @@ where
 
     Y: TupleBirange<E, UL, RemUL>,
     Y::ResumeList: TupleBirange<E::ResumeList, UL, RemUL>,
-    PrefixedResumeList<Y>: TupleRange<Y::ResumeList, Y::Tags<U1>>,
+    (Begin, Y::ResumeList): TupleRange<Y::ResumeList, Y::Tags<U1>>,
 {
     type Yield = Sum<NarrowRem<Y, E, UL>>;
-    type Return = T;
+    type Return = Coro::Return;
 
     fn resume(
         self: Pin<&mut Self>,
-        state: Sum<PrefixedResumeList<NarrowRem<Y, E, UL>>>,
-    ) -> CoroutineState<Self::Yield, T> {
+        state: Sum<(Begin, NarrowRem<Y::ResumeList, E::ResumeList, UL>)>,
+    ) -> CoroutineState<Self::Yield, Self::Return> {
         let mut state = state.broaden();
         let mut proj = self.project();
         loop {
@@ -68,8 +69,8 @@ where
                 Yielded(yielded) => {
                     let r: Sum<Y::ResumeList> = match yielded.narrow() {
                         Ok(narrowed) => match (proj.handler)(narrowed) {
-                            Break(ret) => break Complete(ret),
                             Continue(r) => r.broaden(),
+                            Break(ret) => break Complete(ret),
                         },
                         Err(y) => break Yielded(y),
                     };

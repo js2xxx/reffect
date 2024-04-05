@@ -1,5 +1,6 @@
 use core::{mem::ManuallyDrop, ptr};
 
+use super::range::TupleCount;
 use crate::util::tag::{Tag, UInt, UTerm};
 
 #[doc(hidden)]
@@ -13,7 +14,7 @@ pub union Cons<T, U> {
     pub(super) next: ManuallyDrop<U>,
 }
 
-pub trait TupleSum {
+pub trait TupleSum: TupleCount {
     type Repr;
     type Tags<U>;
 

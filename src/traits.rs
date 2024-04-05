@@ -50,8 +50,6 @@ where
     type ResumeList = (ResumeTy<T>, U::ResumeList);
 }
 
-pub type PrefixedResumeList<E> = (Begin, <E as EffectList>::ResumeList);
-
 #[derive(Clone, Copy)]
 pub struct ResumeTy<E: Effect + ?Sized>(E::Resume);
 
@@ -89,16 +87,14 @@ impl<E: Effect + ?Sized> DerefMut for ResumeTy<E> {
 }
 
 pub trait Effectful<E: EffectList = ()>:
-    Coroutine<Sum<PrefixedResumeList<E>>, Yield = Sum<E>>
-where
-    PrefixedResumeList<E>: TupleSum,
+    Coroutine<Sum<(Begin, E::ResumeList)>, Yield = Sum<E>>
 {
 }
 
-impl<Coro: Coroutine<Sum<PrefixedResumeList<E>>, Yield = Sum<E>>, E: EffectList> Effectful<E>
-    for Coro
+impl<Coro, E> Effectful<E> for Coro
 where
-    PrefixedResumeList<E>: TupleSum,
+    Coro: Coroutine<Sum<(Begin, E::ResumeList)>, Yield = Sum<E>>,
+    E: EffectList,
 {
 }
 
