@@ -113,7 +113,7 @@ mod test {
         effect::{EffectExt, ResumeTy},
         effectful, effectful_block,
         util::Sum,
-        Effect, EffectList, Effectful, Effects, Resumes, Sum,
+        Effect, EffectList, Effectful, Effects, Resumes,
     };
 
     struct Eff1(u32);
@@ -145,13 +145,13 @@ mod test {
 
     struct Empty;
 
-    impl Coroutine<Sum![Begin]> for Empty {
+    impl Coroutine<Sum<(Begin, ())>> for Empty {
         type Yield = Sum<()>;
         type Return = ();
 
         fn resume(
             self: core::pin::Pin<&mut Self>,
-            _: Sum![Begin],
+            _: Sum<(Begin, ())>,
         ) -> core::ops::CoroutineState<Self::Yield, Self::Return> {
             core::ops::CoroutineState::Complete(())
         }

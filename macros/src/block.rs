@@ -13,8 +13,13 @@ impl Parse for EffectfulBlock {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let attr = Attribute::parse_inner(input)?;
         let args = attr.into_iter().find_map(|attr| {
-            let is_ident = attr.path().is_ident("effectful");
-            is_ident.then(|| attr.parse_args_with(Args::parse))
+            attr.path().is_ident("effectful").then(|| {
+                if matches!(attr.meta, syn::Meta::Path(_)) {
+                    Ok(Args::default())
+                } else {
+                    attr.parse_args()
+                }
+            })
         });
 
         Ok(EffectfulBlock {

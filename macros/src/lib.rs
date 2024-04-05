@@ -9,6 +9,7 @@ use proc_macro2::Span;
 use quote::ToTokens;
 use syn::{parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Token};
 
+#[derive(Default)]
 struct Args {
     is_static: Option<Token![static]>,
     is_move: Option<Token![move]>,
@@ -46,7 +47,7 @@ impl syn::visit_mut::VisitMut for DesugarExpr {
                 *i = crate::expr::expand_await(await_token.span, base, self.is_static)
             }
             syn::Expr::Yield(syn::ExprYield { yield_token, expr, .. }) => {
-                *i = crate::expr::expand_yield(yield_token.span, expr.clone())
+                *i = crate::expr::expand_yield(yield_token.span, expr.take())
             }
             _ => syn::visit_mut::visit_expr_mut(self, i),
         }

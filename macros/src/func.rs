@@ -50,9 +50,9 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
         -> impl reffect::Effectful<#list, Return = #output>
     };
 
-    let mut block = item.block;
+    let mut block = *item.block;
     DesugarExpr { is_static: is_static.is_some() }.visit_block_mut(&mut block);
-    item.block = parse_quote! {
+    *item.block = parse_quote! {
         {
             #is_static move |_: #resume_types| {
                 #move_args
