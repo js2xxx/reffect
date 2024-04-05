@@ -25,9 +25,7 @@ pub(crate) fn expand_await(span: Span, expr: &Expr, is_static: bool) -> Expr {
     parse_quote! {
         (match (
             reffect::IntoCoroutine::into_coroutine(#expr),
-            reffect::util::Sum::new(<core::convert::Infallible as reffect::Effect>::tag(
-                reffect::adapter::Begin,
-            )),
+            reffect::util::Sum::new(reffect::adapter::Begin),
         ) {
             (mut #awaitee_pat, mut state) => {
                 use core::pin::{Pin, pin};
@@ -47,7 +45,10 @@ pub(crate) fn expand_await(span: Span, expr: &Expr, is_static: bool) -> Expr {
                         core::ops::CoroutineState::Complete(ret) => break ret,
                     };
                     let eff_marker = eff.type_marker();
-                    state = reffect::util::narrow_effect(yield eff.broaden(), eff_marker);
+                    state = reffect::util::narrow_effect_prefixed(
+                        yield eff.broaden(),
+                        eff_marker,
+                    );
                 }
             }
         })

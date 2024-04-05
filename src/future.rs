@@ -1,5 +1,4 @@
 use core::{
-    convert::Infallible,
     future::{poll_fn, Future, IntoFuture},
     ops::{Coroutine, CoroutineState},
     pin::Pin,
@@ -44,18 +43,15 @@ impl<F: Future> FutCoro<F> {
     }
 }
 
-impl<F, T> Coroutine<Resumes![Infallible, Await]> for FutCoro<F>
+impl<F, T> Coroutine<Resumes![Await]> for FutCoro<F>
 where
     F: Future<Output = T>,
 {
-    type Yield = Effects![Infallible, Await];
+    type Yield = Effects![Await];
 
     type Return = T;
 
-    fn resume(
-        self: Pin<&mut Self>,
-        arg: Resumes![Infallible, Await],
-    ) -> CoroutineState<Effects![Infallible, Await], T> {
+    fn resume(self: Pin<&mut Self>, arg: Resumes![Await]) -> CoroutineState<Effects![Await], T> {
         self.with(|fut| {
             let mut resume_ty = match arg.try_unwrap::<crate::ResumeTy<Await>, _>() {
                 Ok(ty) => ty,
@@ -84,11 +80,11 @@ where
 
 pub enum FutureMarker {}
 
-impl<F, T> IntoCoroutine<FutureMarker, Resumes![Infallible, Await]> for F
+impl<F, T> IntoCoroutine<FutureMarker, Resumes![Await]> for F
 where
     F: IntoFuture<Output = T>,
 {
-    type Yield = Effects![Infallible, Await];
+    type Yield = Effects![Await];
 
     type Return = T;
 
@@ -101,11 +97,11 @@ where
 
 pub async fn run<Coro, T>(coro: Coro) -> T
 where
-    Coro: Effectful<(Infallible, Await), Return = T>,
+    Coro: Effectful<(Await, ()), Return = T>,
 {
     fn poll<Coro, T>(mut coro: Pin<&mut Coro>, cx: &mut Context<'_>) -> Poll<T>
     where
-        Coro: Effectful<(Infallible, Await), Return = T>,
+        Coro: Effectful<(Await, ()), Return = T>,
     {
         // SAFETY: The reference is guaranteed to be valid for the span of this polling.
         let state = Sum::new(Await::tag(unsafe { ResumeTy::new(cx) }));

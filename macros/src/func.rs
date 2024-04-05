@@ -46,7 +46,9 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
         syn::ReturnType::Type(_, ty) => ty,
     };
     let ei = effects.iter();
-    item.sig.output = parse_quote!(-> impl reffect::Effectful<(#(#ei,)*), Return = #output>);
+    item.sig.output = parse_quote! {
+        -> impl reffect::Effectful<reffect::Sum![@FORWARD #(#ei,)*], Return = #output>
+    };
 
     let mut block = item.block;
     DesugarExpr { is_static: is_static.is_some() }.visit_block_mut(&mut block);

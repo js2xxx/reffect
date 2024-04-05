@@ -4,11 +4,9 @@ pub(crate) mod tuple;
 
 use core::{any::type_name, marker::PhantomData};
 
-use tuple_list::TupleList;
-
 use self::sum_type::{range::TupleRange, repr::TupleSum};
 pub use self::sum_type::{umap, Sum};
-use crate::{Effect, EffectList, ResumeTuple, ResumeTy};
+use crate::{Effect, EffectList, PrefixedResumeList, ResumeTy, Sum};
 
 pub fn mark<T: ?Sized>(_: &T) -> PhantomData<T> {
     PhantomData
@@ -18,21 +16,15 @@ pub fn type_name_of_marker<T: ?Sized>(_: PhantomData<T>) -> &'static str {
     type_name::<T>()
 }
 
-pub fn untag_effect<T: Effect>(r: Sum<(ResumeTy<T>,)>, _: PhantomData<(T,)>) -> T::Resume {
+pub fn untag_effect<T: Effect>(r: Sum![ResumeTy<T>], _: PhantomData<(T, ())>) -> T::Resume {
     Sum::into_inner(r).untag()
 }
 
-pub fn narrow_effect<R, E, UL>(r: Sum<R>, marker: PhantomData<E>) -> Sum<ResumeTuple<E>>
+fn narrow_effect_impl<R, RR, E, UL>(r: Sum<R>, marker: PhantomData<E>) -> Sum<RR>
 where
-    ResumeTuple<E>: TupleSum,
-
-    E: TupleSum,
-    E::TupleList: EffectList<Tuple = E>,
-
-    R: TupleSum,
-    R::TupleList: TupleList<Tuple = R>,
-
-    R::TupleList: TupleRange<<E::TupleList as EffectList>::ResumeList, UL>,
+    RR: TupleSum,
+    E: EffectList,
+    R: TupleRange<RR, UL>,
 {
     match r.narrow() {
         Ok(state) => state,
@@ -42,6 +34,24 @@ where
             crate::util::type_name_of_marker(marker),
         ),
     }
+}
+
+pub fn narrow_effect<R, E, UL>(r: Sum<R>, marker: PhantomData<E>) -> Sum<E::ResumeList>
+where
+    E: EffectList,
+    R: TupleRange<E::ResumeList, UL>,
+{
+    narrow_effect_impl(r, marker)
+}
+
+pub fn narrow_effect_prefixed<R, E, UL>(r: Sum<R>, marker: PhantomData<E>) -> Sum<PrefixedResumeList<E>>
+where
+    PrefixedResumeList<E>: TupleSum,
+    E: EffectList,
+
+    R: TupleRange<PrefixedResumeList<E>, UL>,
+{
+    narrow_effect_impl(r, marker)
 }
 
 #[macro_export]

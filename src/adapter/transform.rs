@@ -1,5 +1,4 @@
 use core::{
-    convert::Infallible,
     marker::PhantomData,
     ops::{
         Coroutine,
@@ -9,23 +8,18 @@ use core::{
 };
 
 use pin_project::pin_project;
-use tuple_list::{Tuple, TupleList};
 
 use crate::{
-    adapter::{Begin, ResumeList},
+    adapter::Begin,
     traits::IntoCoroutine,
     util::{
-        narrow_effect,
-        sum_type::{
+        narrow_effect_prefixed, sum_type::{
             range::{TupleBirange, TupleRange},
-            repr::{ReprMatch, TupleSum},
+            repr::TupleSum,
             NarrowRem,
-        },
-        tag::*,
-        tuple::{ConcatList, ConcatT, ConcatTL},
-        Sum,
+        }, tag::U1, tuple::{ConcatList, ConcatT}, Sum
     },
-    Effect, EffectList, ResumeTuple, ResumeTy,
+    EffectList, PrefixedResumeList,
 };
 
 pub fn transform<Coro, Trans, H, MTypes, MULists>(
@@ -50,78 +44,57 @@ pub struct Transform<Coro, Trans, H, MTypes, MULists> {
     markers: PhantomData<(MTypes, MULists)>,
 }
 
-impl<Coro, Trans, R, Y, T, ER, E, H, HR, HY, OR, OY, EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL>
-    Coroutine<Sum<OR>>
-    for Transform<
-        Coro,
-        Trans,
-        H,
-        (R, Y, ER, E, HR, HY, OR, OY),
-        (EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL),
-    >
+impl<Coro, Trans, Y, T, E, H, HY, OY, EUL, RemEUL, HOYUL, OYUL, HORUL, ORUL>
+    Coroutine<Sum<PrefixedResumeList<OY>>>
+    for Transform<Coro, Trans, H, (Y, E, HY, OY), (EUL, RemEUL, HOYUL, OYUL, HORUL, ORUL)>
 where
-    Coro: Coroutine<Sum<R>, Yield = Sum<Y>, Return = T>,
+    Coro: Coroutine<Sum<PrefixedResumeList<Y>>, Yield = Sum<Y>, Return = T>,
     Trans: FnMut(Sum<E>) -> H,
-    H: Coroutine<Sum<HR>, Yield = Sum<HY>, Return = Sum<ER>>,
+    H: Coroutine<Sum<PrefixedResumeList<HY>>, Yield = Sum<HY>, Return = Sum<E::ResumeList>>,
 
-    R: TupleSum,
-    R::TupleList: TupleList<Tuple = R>,
-    Y: TupleSum,
-    Y::TupleList: EffectList<ResumeList = R::TupleList, Tuple = Y>,
+    E: EffectList,
 
-    ER: TupleSum,
-    ER::TupleList: TupleList<Tuple = ER>,
-    E: TupleSum,
-    E::TupleList: EffectList<ResumeList = ER::TupleList, Tuple = E>,
+    PrefixedResumeList<Y>: TupleSum,
+    Y: EffectList,
 
-    NarrowRem<R, ER, EUL>: TupleSum,
-    <NarrowRem<R, ER, EUL> as Tuple>::TupleList: TupleList<Tuple = NarrowRem<R, ER, EUL>>,
-    NarrowRem<Y, E, EUL>: TupleSum,
-    <NarrowRem<Y, E, EUL> as Tuple>::TupleList: EffectList<
-        ResumeList = <NarrowRem<R, ER, EUL> as Tuple>::TupleList,
-        Tuple = NarrowRem<Y, E, EUL>,
-    >,
+    PrefixedResumeList<HY>: TupleSum,
+    HY: EffectList,
 
-    HR: TupleSum,
-    HR::TupleList: TupleList<Tuple = HR>,
-    HY: TupleSum,
-    HY::TupleList: EffectList<ResumeList = HR::TupleList, Tuple = HY>,
+    PrefixedResumeList<OY>: TupleSum,
+    OY: EffectList,
 
-    OR: TupleSum,
-    OR::TupleList: TupleList<Tuple = OR>,
-    OY: TupleSum,
-    OY::TupleList: EffectList<ResumeList = OR::TupleList, Tuple = OY>,
+    NarrowRem<Y, E, EUL>: EffectList<ResumeList = NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
 
-    Y::TupleList: TupleBirange<E::TupleList, EUL, RemEUL>,
-    R::TupleList: TupleBirange<ER::TupleList, EUL, RemEUL>,
+    Y: TupleBirange<E, EUL, RemEUL>,
+    Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL>,
+    PrefixedResumeList<Y>: TupleRange<Y::ResumeList, Y::Tags<U1>>,
 
-    OY::TupleList: TupleRange<HY::TupleList, HOYUL>,
-    OY::TupleList: TupleRange<<NarrowRem<Y, E, EUL> as Tuple>::TupleList, OYUL>,
-    OR::TupleList: TupleRange<HR::TupleList, HORUL>,
-    OR::TupleList: TupleRange<<NarrowRem<R, ER, EUL> as Tuple>::TupleList, ORUL>,
-
-    R::Repr: ReprMatch<ResumeTy<Infallible>, U0>,
-    HR::Repr: ReprMatch<ResumeTy<Infallible>, U0>,
+    OY: TupleRange<HY, HOYUL> + TupleRange<NarrowRem<Y, E, EUL>, OYUL>,
+    OY::ResumeList: TupleRange<HY::ResumeList, HORUL>
+        + TupleRange<<NarrowRem<Y, E, EUL> as EffectList>::ResumeList, ORUL>,
 {
     type Yield = Sum<OY>;
     type Return = T;
 
-    fn resume(self: Pin<&mut Self>, state: Sum<OR>) -> CoroutineState<Self::Yield, T> {
+    fn resume(
+        self: Pin<&mut Self>,
+        state: Sum<PrefixedResumeList<OY>>,
+    ) -> CoroutineState<Self::Yield, T> {
         let mut proj = self.project();
 
-        let mut state: Sum<R> = match proj.handler.as_mut().as_pin_mut() {
+        let mut state: Sum<PrefixedResumeList<Y>> = match proj.handler.as_mut().as_pin_mut() {
             Some(mut handler) => {
-                let state = match handler
+                let state: Sum<Y::ResumeList> = match handler
                     .as_mut()
-                    .resume(narrow_effect(state, PhantomData::<HY>))
+                    .resume(narrow_effect_prefixed(state, PhantomData::<HY>))
                 {
                     Yielded(eff) => return Yielded(eff.broaden()),
                     Complete(ret) => ret.broaden(),
                 };
                 proj.handler.set(None);
-                state
+                state.broaden()
             }
-            None => narrow_effect(state, PhantomData::<NarrowRem<Y, E, EUL>>).broaden(),
+            None => narrow_effect_prefixed(state, PhantomData::<NarrowRem<Y, E, EUL>>).broaden(),
         };
 
         loop {
@@ -133,10 +106,12 @@ where
                             proj.handler.set(Some(handler));
 
                             let handler = proj.handler.as_mut().as_pin_mut().unwrap();
-                            match handler.resume(Sum::new(Infallible::tag(Begin))) {
-                                Yielded(eff) => return Yielded(eff.broaden()),
+                            let state: Sum<Y::ResumeList> = match handler.resume(Sum::new(Begin)) {
+                                Yielded(eff) => break Yielded(eff.broaden()),
                                 Complete(ret) => ret.broaden(),
-                            }
+                            };
+                            proj.handler.set(None);
+                            state.broaden()
                         }
                         Err(rem) => break Yielded(rem.broaden()),
                     }
@@ -147,22 +122,8 @@ where
     }
 }
 
-pub type Transform0<Coro, Trans, H, Y, E, HY, EUL, RemEUL, HRUL, HYUL> = Transform<
-    Coro,
-    Trans,
-    H,
-    (
-        ResumeTuple<Y>,
-        Y,
-        ResumeTuple<E>,
-        E,
-        ResumeTuple<HY>,
-        HY,
-        ResumeTuple<Y>,
-        Y,
-    ),
-    (EUL, RemEUL, HRUL, RemEUL, HYUL, RemEUL),
->;
+pub type Transform0<Coro, Trans, H, Y, E, HY, EUL, RemEUL, HRUL, HYUL> =
+    Transform<Coro, Trans, H, (Y, E, HY, Y), (EUL, RemEUL, HRUL, RemEUL, HYUL, RemEUL)>;
 
 #[allow(clippy::type_complexity)]
 pub fn transform0<Coro, Trans, Y, E, H, HY, EUL, RemEUL, HRUL, HYUL>(
@@ -170,101 +131,72 @@ pub fn transform0<Coro, Trans, Y, E, H, HY, EUL, RemEUL, HRUL, HYUL>(
     trans: Trans,
 ) -> Transform0<Coro, Trans, H, Y, E, HY, EUL, RemEUL, HRUL, HYUL>
 where
-    Coro: Coroutine<Sum<ResumeTuple<Y>>, Yield = Sum<Y>>,
+    Coro: Coroutine<Sum<PrefixedResumeList<Y>>, Yield = Sum<Y>>,
     Trans: FnMut(Sum<E>) -> H,
-    H: Coroutine<Sum<ResumeTuple<HY>>, Yield = Sum<HY>, Return = Sum<ResumeTuple<E>>>,
+    H: Coroutine<Sum<PrefixedResumeList<HY>>, Yield = Sum<HY>, Return = Sum<E::ResumeList>>,
 
-    ResumeTuple<Y>: TupleSum,
-    Y: TupleSum,
-    Y::TupleList: EffectList<Tuple = Y>,
+    E: EffectList,
 
-    ResumeTuple<E>: TupleSum,
-    E: TupleSum,
-    E::TupleList: EffectList<Tuple = E>,
+    PrefixedResumeList<Y>: TupleSum,
+    Y: EffectList,
 
-    ResumeTuple<HY>: TupleSum,
-    HY: TupleSum,
-    HY::TupleList: EffectList<Tuple = HY>,
+    PrefixedResumeList<HY>: TupleSum,
+    HY: EffectList,
 
-    Y::TupleList: TupleBirange<E::TupleList, EUL, RemEUL>,
-    ResumeList<Y>: TupleBirange<ResumeList<E>, EUL, RemEUL>,
+    Y: TupleBirange<E, EUL, RemEUL>,
+    Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL>,
 
-    Y::TupleList: TupleRange<HY::TupleList, HYUL>,
-    ResumeList<Y>: TupleRange<ResumeList<HY>, HRUL>,
-
-    <ResumeTuple<Y> as TupleSum>::Repr: ReprMatch<ResumeTy<Infallible>, U0>,
-    <ResumeTuple<HY> as TupleSum>::Repr: ReprMatch<ResumeTy<Infallible>, U0>,
+    Y: TupleRange<HY, HYUL>,
+    Y::ResumeList: TupleRange<HY::ResumeList, HRUL>,
 {
     transform(coro, trans)
 }
 
-type CoprodList<A, B> = ConcatTL<A, B>;
-
 type Coprod<A, B> = ConcatT<A, B>;
 
-pub type Transform1<Coro, Trans, H, R, Y, E, ER, HR, HY, EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL> =
-    Transform<
-        Coro,
-        Trans,
-        H,
-        (
-            R,
-            Y,
-            ER,
-            E,
-            HR,
-            HY,
-            Coprod<HR, NarrowRem<R, ER, EUL>>,
-            Coprod<HY, NarrowRem<Y, E, EUL>>,
-        ),
-        (EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL),
-    >;
+pub type Transform1<Coro, Trans, H, Y, E, HY, EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL> = Transform<
+    Coro,
+    Trans,
+    H,
+    (Y, E, HY, Coprod<HY, NarrowRem<Y, E, EUL>>),
+    (EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL),
+>;
 
 #[allow(clippy::type_complexity)]
-pub fn transform1<Coro, Trans, R, Y, T, E, ER, H, HR, HY, EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL>(
+pub fn transform1<Coro, Trans, Y, T, E, H, HY, EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL>(
     coro: Coro,
     trans: Trans,
-) -> Transform1<Coro, Trans, H, R, Y, E, ER, HR, HY, EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL>
+) -> Transform1<Coro, Trans, H, Y, E, HY, EUL, RemEUL, HORUL, ORUL, HOYUL, OYUL>
 where
-    Coro: Coroutine<Sum<R>, Yield = Sum<Y>, Return = T>,
+    Coro: Coroutine<Sum<PrefixedResumeList<Y>>, Yield = Sum<Y>, Return = T>,
     Trans: FnMut(Sum<E>) -> H,
-    H: Coroutine<Sum<HR>, Yield = Sum<HY>, Return = Sum<ER>>,
+    H: Coroutine<Sum<PrefixedResumeList<HY>>, Yield = Sum<HY>, Return = Sum<E::ResumeList>>,
 
-    R: TupleSum,
-    R::TupleList: TupleList<Tuple = R>,
-    Y: TupleSum,
-    Y::TupleList: EffectList<ResumeList = R::TupleList, Tuple = Y>,
+    E: EffectList,
 
-    ER: TupleSum,
-    ER::TupleList: TupleList<Tuple = ER>,
-    E: TupleSum,
-    E::TupleList: EffectList<ResumeList = ER::TupleList, Tuple = E>,
+    PrefixedResumeList<Y>: TupleSum,
+    Y: EffectList,
 
-    HR: TupleSum,
-    HR::TupleList: TupleList<Tuple = HR>,
-    HR::TupleList: ConcatList<<NarrowRem<R, ER, EUL> as Tuple>::TupleList>,
-    HY: TupleSum,
-    HY::TupleList: EffectList<ResumeList = HR::TupleList, Tuple = HY>,
-    HY::TupleList: ConcatList<<NarrowRem<Y, E, EUL> as Tuple>::TupleList>,
+    PrefixedResumeList<HY>: TupleSum,
+    HY: EffectList,
 
-    Coprod<HR, NarrowRem<R, ER, EUL>>: TupleSum,
-    CoprodList<HR, NarrowRem<R, ER, EUL>>: TupleList,
-    Coprod<HY, NarrowRem<Y, E, EUL>>: TupleSum,
-    CoprodList<HY, NarrowRem<Y, E, EUL>>:
-        EffectList<ResumeList = CoprodList<HR, NarrowRem<R, ER, EUL>>>,
+    HY::ResumeList: ConcatList<NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
+    HY: ConcatList<NarrowRem<Y, E, EUL>>,
 
-    Y::TupleList: TupleBirange<E::TupleList, EUL, RemEUL>,
-    R::TupleList: TupleBirange<ER::TupleList, EUL, RemEUL>,
+    Coprod<HY::ResumeList, NarrowRem<Y::ResumeList, E::ResumeList, EUL>>: TupleSum,
+    Coprod<HY, NarrowRem<Y, E, EUL>>: EffectList<
+        ResumeList = Coprod<HY::ResumeList, NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
+    >,
 
-    CoprodList<HY, NarrowRem<Y, E, EUL>>: TupleRange<HY::TupleList, HOYUL>,
-    CoprodList<HY, NarrowRem<Y, E, EUL>>:
-        TupleRange<<NarrowRem<Y, E, EUL> as Tuple>::TupleList, OYUL>,
-    CoprodList<HR, NarrowRem<R, ER, EUL>>: TupleRange<HR::TupleList, HORUL>,
-    CoprodList<HR, NarrowRem<R, ER, EUL>>:
-        TupleRange<<NarrowRem<R, ER, EUL> as Tuple>::TupleList, ORUL>,
+    Y: TupleBirange<E, EUL, RemEUL>,
+    Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL>,
 
-    R::Repr: ReprMatch<ResumeTy<Infallible>, U0>,
-    HR::Repr: ReprMatch<ResumeTy<Infallible>, U0>,
+    Coprod<HY, NarrowRem<Y, E, EUL>>: TupleRange<HY, HOYUL>,
+    Coprod<HY, NarrowRem<Y, E, EUL>>: TupleRange<NarrowRem<Y, E, EUL>, OYUL>,
+    Coprod<HY::ResumeList, NarrowRem<Y::ResumeList, E::ResumeList, EUL>>:
+        TupleRange<HY::ResumeList, HORUL>,
+    Coprod<HY::ResumeList, NarrowRem<Y::ResumeList, E::ResumeList, EUL>>:
+        TupleRange<NarrowRem<Y::ResumeList, E::ResumeList, EUL>, ORUL>,
 {
     transform(coro, trans)
 }

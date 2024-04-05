@@ -4,6 +4,18 @@ pub struct UTerm;
 
 pub struct UInt<U>(PhantomData<U>);
 
+pub trait Tag {
+    const VALUE: u8;
+}
+
+impl Tag for UTerm {
+    const VALUE: u8 = 0;
+}
+
+impl<U: Tag> Tag for UInt<U> {
+    const VALUE: u8 = 1 + U::VALUE;
+}
+
 pub type U0 = UTerm;
 pub type U1 = UInt<U0>;
 pub type U2 = UInt<U1>;

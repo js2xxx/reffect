@@ -1,153 +1,154 @@
-use tuple_list::Tuple;
+use core::{mem::ManuallyDrop, ptr};
 
-use crate::util::tag::*;
+use crate::util::tag::{Tag, UInt, UTerm};
 
-pub trait TupleSum: Tuple {
-    type Repr: Repr<Tuple = Self>;
+#[doc(hidden)]
+pub struct Nil;
+
+#[doc(hidden)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union Cons<T, U> {
+    pub(super) data: ManuallyDrop<T>,
+    pub(super) next: ManuallyDrop<U>,
 }
 
-pub trait Repr {
-    type Tuple: TupleSum<Repr = Self>;
+pub trait TupleSum {
+    type Repr;
+    type Tags<U>;
 
-    type Tags: Tuple;
+    #[doc(hidden)]
+    unsafe fn drop(this: &mut ManuallyDrop<Self::Repr>, tag: u8);
 }
 
-pub trait ReprMatch<T, U>: Repr {
-    type Remainder: Repr;
+impl TupleSum for () {
+    type Repr = Nil;
+    type Tags<U> = ();
 
-    fn new(value: T) -> Self;
-
-    fn from_remainder(remainder: Self::Remainder) -> Self;
-
-    fn try_unwrap(self) -> Result<T, Self::Remainder>;
-
-    fn get(&self) -> Option<&T>;
-
-    fn get_mut(&mut self) -> Option<&mut T>;
-
-    type Substitute<T2>: Repr;
-    fn map<T2>(self, f: impl FnOnce(T) -> T2) -> Self::Substitute<T2>;
+    unsafe fn drop(_: &mut ManuallyDrop<Nil>, _: u8) {}
 }
 
-macro_rules! enums {
-    ($name:ident: $($t:ident,)*) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        pub enum $name<$($t),*> {
-            $($t($t),)*
+impl<Head, Tail> TupleSum for (Head, Tail)
+where
+    Tail: TupleSum,
+{
+    type Repr = Cons<Head, Tail::Repr>;
+    type Tags<U> = (U, Tail::Tags<U>);
+
+    unsafe fn drop(this: &mut ManuallyDrop<Self::Repr>, tag: u8) {
+        if tag == 0 {
+            unsafe { ManuallyDrop::drop(&mut this.data) };
+        } else {
+            unsafe { Tail::drop(&mut this.next, tag - 1) }
         }
-
-        impl<$($t),*> TupleSum for ($($t,)*) {
-            type Repr = $name<$($t),*>;
-        }
-
-        impl<$($t),*> Repr for $name<$($t),*> {
-            type Tuple = ($($t,)*);
-            type Tags = ($(U0, ${ignore($t)})*);
-        }
-    };
-    ($prev:ident => $name:ident: $($tag:ident,)*; $first:ident, $($t:ident,)*; $($u:ident,)*) => {
-        enums!($name: $first, $($t,)*);
-
-        enums!(@RECURSE $prev => $name:
-            () $($tag,)*;
-            () $first, $($t,)*; $($u,)*
-        );
-    };
-    (@MATCH $prev:ident => $name:ident:
-        ($($ts:ident,)*) $tag:ident, $($tt:ident,)*;
-        ($($s:ident,)*) $first:ident, $($t:ident,)*; $($u:ident,)*
-    ) => {
-        impl<$($s,)* $first, $($t),*>
-            ReprMatch<$first, $tag> for $name<$($s,)* $first, $($t),*>
-        {
-            type Remainder = $prev<$($s,)* $($t),*>;
-
-            fn new(value: $first) -> Self {
-                Self::$first(value)
-            }
-
-            fn from_remainder(remainder: $prev<$($s,)* $($t),*>) -> Self {
-                match remainder {
-                    $(
-                        $prev::$s(value) => Self::$s(value),
-                    )*
-                    $(
-                        $prev::$u(value) => Self::$t(value),
-                    )*
-                }
-            }
-
-            fn try_unwrap(self) -> Result<$first, Self::Remainder> {
-                match self {
-                    Self::$first(value) => Ok(value),
-                    $(
-                        Self::$s(value) => Err($prev::$s(value)),
-                    )*
-                    $(
-                        Self::$t(value) => Err($prev::$u(value)),
-                    )*
-                }
-            }
-
-            #[allow(unreachable_patterns)]
-            fn get(&self) -> Option<&$first> {
-                match self {
-                    Self::$first(value) => Some(value),
-                    _ => None,
-                }
-            }
-
-            #[allow(unreachable_patterns)]
-            fn get_mut(&mut self) -> Option<&mut $first> {
-                match self {
-                    Self::$first(value) => Some(value),
-                    _ => None,
-                }
-            }
-
-            type Substitute<T2> = $name<$($s,)* T2, $($t,)*>;
-            fn map<T2>(self, f: impl FnOnce($first) -> T2) -> Self::Substitute<T2> {
-                match self {
-                    $(
-                        Self::$s(value) => $name::$s(value),
-                    )*
-                    Self::$first(value) => $name::$first(f(value)),
-                    $(
-                        Self::$t(value) => $name::$t(value),
-                    )*
-                }
-            }
-        }
-    };
-    (@RECURSE $prev:ident => $name:ident:
-        ($($ts:ident,)*) $tag:ident,;
-        ($($s:ident,)*) $first:ident,;
-    ) => {
-        enums!(@MATCH $prev => $name:
-            ($($ts,)*) $tag,;
-            ($($s,)*) $first,;
-        );
-    };
-    (@RECURSE $prev:ident => $name:ident:
-        ($($ts:ident,)*) $tag:ident, $tnext:ident, $($tt:ident,)*;
-        ($($s:ident,)*) $first:ident, $next:ident, $($t:ident,)*; $unext:ident, $($u:ident,)*
-    ) => {
-        enums!(@MATCH $prev => $name:
-            ($($ts,)*) $tag, $tnext, $($tt,)*;
-            ($($s,)*) $first, $next, $($t,)*; $unext, $($u,)*
-        );
-        enums!(@RECURSE $prev => $name:
-            ($($ts,)* $tag,) $tnext, $($tt,)*;
-            ($($s,)* $first,) $next, $($t,)*; $($u,)*
-        );
-    };
+    }
 }
-enums!(E0:);
-enums!(E0 => E1: U0,;A,;);
-enums!(E1 => E2: U0, U1,;A, B,; A,);
-enums!(E2 => E3: U0, U1, U2,;A, B, C,; A, B,);
-enums!(E3 => E4: U0, U1, U2, U3,;A, B, C, D,; A, B, C,);
-enums!(E4 => E5: U0, U1, U2, U3, U4,;A, B, C, D, E,; A, B, C, D,);
-enums!(E5 => E6: U0, U1, U2, U3, U4, U5,; A, B, C, D, E, F,; A, B, C, D, E,);
-enums!(E6 => E7: U0, U1, U2, U3, U4, U5, U6,; A, B, C, D, E, F, G,; A, B, C, D, E, F,);
-enums!(E7 => E8: U0, U1, U2, U3, U4, U5, U6, U7,; A, B, C, D, E, F, G, H,; A, B, C, D, E, F, G,);
+
+pub trait TupleMatch<T, U: Tag>: TupleSum {
+    #[doc(hidden)]
+    fn from_data(data: T) -> Self::Repr;
+
+    #[doc(hidden)]
+    unsafe fn into_data_unchecked(this: Self::Repr) -> T;
+
+    #[doc(hidden)]
+    fn as_ptr(this: &Self::Repr) -> *const T;
+
+    #[doc(hidden)]
+    fn as_mut_ptr(this: &mut Self::Repr) -> *mut T;
+
+    type Remainder: TupleSum;
+    type Substitute<T2>: TupleMatch<T2, U>;
+
+    #[doc(hidden)]
+    fn from_remainder(tag: u8) -> u8;
+
+    #[doc(hidden)]
+    fn try_unwrap(tag: u8) -> Result<(), u8>;
+}
+
+impl<Head, Tail> TupleMatch<Head, UTerm> for (Head, Tail)
+where
+    Tail: TupleSum,
+{
+    fn from_data(data: Head) -> Self::Repr {
+        Cons { data: ManuallyDrop::new(data) }
+    }
+
+    unsafe fn into_data_unchecked(this: Self::Repr) -> Head {
+        unsafe { ManuallyDrop::into_inner(this.data) }
+    }
+
+    fn as_ptr(this: &Self::Repr) -> *const Head {
+        let ptr = unsafe { ptr::addr_of!(this.data).cast::<Head>() };
+        debug_assert_eq!(ptr.cast(), this as _);
+        ptr
+    }
+
+    fn as_mut_ptr(this: &mut Self::Repr) -> *mut Head {
+        let ptr = unsafe { ptr::addr_of_mut!(this.data).cast::<Head>() };
+        debug_assert_eq!(ptr.cast(), this as _);
+        ptr
+    }
+
+    type Remainder = Tail;
+    type Substitute<T2> = (T2, Tail);
+
+    fn from_remainder(tag: u8) -> u8 {
+        tag + 1
+    }
+
+    fn try_unwrap(tag: u8) -> Result<(), u8> {
+        match tag.checked_sub(1) {
+            None => Ok(()),
+            Some(tag) => Err(tag),
+        }
+    }
+}
+
+impl<Head, Tail, T, U: Tag> TupleMatch<T, UInt<U>> for (Head, Tail)
+where
+    Tail: TupleMatch<T, U>,
+{
+    fn from_data(data: T) -> Self::Repr {
+        Cons {
+            next: ManuallyDrop::new(Tail::from_data(data)),
+        }
+    }
+
+    unsafe fn into_data_unchecked(this: Self::Repr) -> T {
+        unsafe { Tail::into_data_unchecked(ManuallyDrop::into_inner(this.next)) }
+    }
+
+    fn as_ptr(this: &Self::Repr) -> *const T {
+        let ptr = unsafe { Tail::as_ptr(&this.next) };
+        debug_assert_eq!(ptr.cast(), this as _);
+        ptr
+    }
+
+    fn as_mut_ptr(this: &mut Self::Repr) -> *mut T {
+        let ptr = unsafe { Tail::as_mut_ptr(&mut this.next) };
+        debug_assert_eq!(ptr.cast(), this as _);
+        ptr
+    }
+
+    type Remainder = (Head, <Tail as TupleMatch<T, U>>::Remainder);
+    type Substitute<T2> = (Head, Tail::Substitute<T2>);
+
+    fn from_remainder(tag: u8) -> u8 {
+        if tag < UInt::<U>::VALUE {
+            tag
+        } else {
+            tag + 1
+        }
+    }
+
+    fn try_unwrap(tag: u8) -> Result<(), u8> {
+        let cur = UInt::<U>::VALUE;
+        match tag.cmp(&cur) {
+            core::cmp::Ordering::Equal => Ok(()),
+            core::cmp::Ordering::Less => Err(tag),
+            core::cmp::Ordering::Greater => Err(tag - 1),
+        }
+    }
+}

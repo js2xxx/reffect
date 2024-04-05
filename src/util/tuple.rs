@@ -1,5 +1,3 @@
-use tuple_list::{Tuple, TupleList};
-
 // use super::tag::{UInt, UTerm};
 
 // pub trait Count {
@@ -36,10 +34,10 @@ where
 }
 
 pub trait ConcatList<TList> {
-    type Output: TupleList;
+    type Output;
 }
 
-impl<T: TupleList> ConcatList<()> for T {
+impl<T> ConcatList<()> for T {
     type Output = T;
 }
 
@@ -51,10 +49,7 @@ where
     type Output = <T::Output as ConcatList<Tail>>::Output;
 }
 
-pub type ConcatTL<TupleA, TupleB> =
-    <<TupleA as Tuple>::TupleList as ConcatList<<TupleB as Tuple>::TupleList>>::Output;
-
-pub type ConcatT<TupleA, TupleB> = <ConcatTL<TupleA, TupleB> as TupleList>::Tuple;
+pub type ConcatT<A, B> = <A as ConcatList<B>>::Output;
 
 // pub trait Split<T, U> {
 //     type Output;

@@ -1,12 +1,12 @@
 use core::{
-    convert::Infallible,
     fmt::Debug,
     ops::{Coroutine, Deref, DerefMut},
 };
 
-use tuple_list::{Tuple, TupleList};
-
-use crate::util::{sum_type::repr::TupleSum, Sum};
+use crate::{
+    adapter::Begin,
+    util::{sum_type::repr::TupleSum, Sum},
+};
 
 pub trait Effect {
     type Resume;
@@ -30,12 +30,12 @@ macro_rules! Effects {
 #[macro_export]
 macro_rules! Resumes {
     ($($t:ty),* $(,)?) => {
-        $crate::Sum![$($crate::ResumeTy<$t>,)*]
+        $crate::Sum![$crate::adapter::Begin, $($crate::ResumeTy<$t>,)*]
     };
 }
 
-pub trait EffectList: TupleList {
-    type ResumeList: TupleList;
+pub trait EffectList: TupleSum {
+    type ResumeList: TupleSum;
 }
 
 impl EffectList for () {
@@ -44,13 +44,13 @@ impl EffectList for () {
 
 impl<T: Effect, U: EffectList> EffectList for (T, U)
 where
-    (T, U): TupleList,
-    (ResumeTy<T>, U::ResumeList): TupleList,
+    (T, U): TupleSum,
+    (ResumeTy<T>, U::ResumeList): TupleSum,
 {
     type ResumeList = (ResumeTy<T>, U::ResumeList);
 }
 
-pub type ResumeTuple<E> = <<<E as Tuple>::TupleList as EffectList>::ResumeList as TupleList>::Tuple;
+pub type PrefixedResumeList<E> = (Begin, <E as EffectList>::ResumeList);
 
 #[derive(Clone, Copy)]
 pub struct ResumeTy<E: Effect + ?Sized>(E::Resume);
@@ -88,18 +88,17 @@ impl<E: Effect + ?Sized> DerefMut for ResumeTy<E> {
     }
 }
 
-pub trait Effectful<E: TupleSum = (Infallible,)>:
-    Coroutine<Sum<ResumeTuple<E>>, Yield = Sum<E>>
+pub trait Effectful<E: EffectList = ()>:
+    Coroutine<Sum<PrefixedResumeList<E>>, Yield = Sum<E>>
 where
-    E::TupleList: EffectList,
-    ResumeTuple<E>: TupleSum,
+    PrefixedResumeList<E>: TupleSum,
 {
 }
 
-impl<Coro: Coroutine<Sum<ResumeTuple<E>>, Yield = Sum<E>>, E: TupleSum> Effectful<E> for Coro
+impl<Coro: Coroutine<Sum<PrefixedResumeList<E>>, Yield = Sum<E>>, E: EffectList> Effectful<E>
+    for Coro
 where
-    E::TupleList: EffectList,
-    ResumeTuple<E>: TupleSum,
+    PrefixedResumeList<E>: TupleSum,
 {
 }
 

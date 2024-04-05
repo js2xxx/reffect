@@ -1,5 +1,4 @@
 use core::{
-    convert::Infallible,
     marker::PhantomData,
     ops::{
         ControlFlow::{self, *},
@@ -14,14 +13,13 @@ use pin_project::pin_project;
 use crate::{
     util::{
         sum_type::{
-            range::TupleBirange,
-            repr::{ReprMatch, TupleSum},
+            range::{TupleBirange, TupleRange},
             NarrowRem,
         },
-        tag::*,
+        tag::U1,
         Sum,
     },
-    EffectList, ResumeTuple, ResumeTy,
+    EffectList, PrefixedResumeList,
 };
 
 pub fn handle<Coro, H, Markers>(coro: Coro, handler: H) -> Handle<Coro, H, Markers> {
@@ -41,45 +39,41 @@ pub struct Handle<Coro, H, Markers> {
     markers: PhantomData<Markers>,
 }
 
-impl<Coro, Y, T, H, E, RemUL, UL> Coroutine<Sum<NarrowRem<ResumeTuple<Y>, ResumeTuple<E>, UL>>>
+impl<Coro, Y, T, H, E, RemUL, UL> Coroutine<Sum<PrefixedResumeList<NarrowRem<Y, E, UL>>>>
     for Handle<Coro, H, (Y, T, E, RemUL, UL)>
 where
-    Coro: Coroutine<Sum<ResumeTuple<Y>>, Yield = Sum<Y>, Return = T>,
-    H: FnMut(Sum<E>) -> ControlFlow<T, Sum<ResumeTuple<E>>>,
+    Coro: Coroutine<Sum<PrefixedResumeList<Y>>, Yield = Sum<Y>, Return = T>,
+    H: FnMut(Sum<E>) -> ControlFlow<T, Sum<E::ResumeList>>,
 
-    ResumeTuple<Y>: TupleSum,
-    Y: TupleSum,
-    Y::TupleList: EffectList,
+    Y: EffectList,
+    E: EffectList,
 
-    ResumeTuple<E>: TupleSum,
-    E: TupleSum,
-    E::TupleList: EffectList,
+    NarrowRem<Y, E, UL>: EffectList<ResumeList = NarrowRem<Y::ResumeList, E::ResumeList, UL>>,
 
-    <Y::TupleList as EffectList>::ResumeList:
-        TupleBirange<<E::TupleList as EffectList>::ResumeList, UL, RemUL>,
-    Y::TupleList: TupleBirange<E::TupleList, UL, RemUL, Tuple = Y>,
-
-    <ResumeTuple<Y> as TupleSum>::Repr: ReprMatch<ResumeTy<Infallible>, U0>,
+    Y: TupleBirange<E, UL, RemUL>,
+    Y::ResumeList: TupleBirange<E::ResumeList, UL, RemUL>,
+    PrefixedResumeList<Y>: TupleRange<Y::ResumeList, Y::Tags<U1>>,
 {
     type Yield = Sum<NarrowRem<Y, E, UL>>;
     type Return = T;
 
     fn resume(
         self: Pin<&mut Self>,
-        state: Sum<NarrowRem<ResumeTuple<Y>, ResumeTuple<E>, UL>>,
+        state: Sum<PrefixedResumeList<NarrowRem<Y, E, UL>>>,
     ) -> CoroutineState<Self::Yield, T> {
         let mut state = state.broaden();
         let mut proj = self.project();
         loop {
             match proj.coro.as_mut().resume(state) {
                 Yielded(yielded) => {
-                    state = match yielded.narrow() {
+                    let r: Sum<Y::ResumeList> = match yielded.narrow() {
                         Ok(narrowed) => match (proj.handler)(narrowed) {
                             Break(ret) => break Complete(ret),
                             Continue(r) => r.broaden(),
                         },
                         Err(y) => break Yielded(y),
-                    }
+                    };
+                    state = r.broaden()
                 }
                 Complete(ret) => break Complete(ret),
             }

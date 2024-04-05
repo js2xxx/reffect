@@ -1,23 +1,35 @@
+mod derive;
 pub mod range;
 pub mod repr;
 
 use core::{
-    convert::Infallible, fmt, marker::PhantomData, ops::{Deref, DerefMut}
+    fmt,
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+    mem::{self, ManuallyDrop, MaybeUninit},
+    ops::{Deref, DerefMut},
+    ptr,
 };
 
 pub use tuple_list::tuple_list_type as umap;
-use tuple_list::Tuple;
+
+use super::tag::{Tag, UTerm};
 
 pub type Repr<S> = <S as repr::TupleSum>::Repr;
 
 #[macro_export]
 macro_rules! Sum {
+    (@FORWARD) => [()];
+    (@FORWARD $head:ty, $($t:ty,)*) => [($head, $crate::Sum!(@FORWARD $($t,)*))];
     [$($t:ty),* $(,)?] => {
-        $crate::util::Sum::<($($t,)*)>
+        $crate::util::Sum::<$crate::Sum!(@FORWARD $($t,)*)>
     };
 }
 
-pub struct Sum<S: repr::TupleSum>(Repr<S>);
+pub struct Sum<S: repr::TupleSum> {
+    tag: u8,
+    data: ManuallyDrop<Repr<S>>,
+}
 
 impl<T> From<T> for Sum![T] {
     fn from(value: T) -> Self {
@@ -29,178 +41,207 @@ impl<T> Deref for Sum![T] {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        match &self.0 {
-            repr::E1::A(t) => t,
-        }
+        unsafe { &*<(T, ()) as repr::TupleMatch<T, UTerm>>::as_ptr(&self.data) }
     }
 }
 
 impl<T> DerefMut for Sum![T] {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        match &mut self.0 {
-            repr::E1::A(t) => t,
-        }
+        unsafe { &mut *<(T, ()) as repr::TupleMatch<T, UTerm>>::as_mut_ptr(&mut self.data) }
     }
 }
 
 impl<T> Sum![T] {
     pub fn into_inner(self) -> T {
-        match self.0 {
-            repr::E1::A(t) => t,
+        unsafe {
+            let this = ManuallyDrop::new(self);
+            mem::transmute_copy(&this.data)
         }
     }
 }
 
-impl Sum![Infallible] {
+impl Sum![] {
     pub fn unreachable(self) -> ! {
-        match self.0 {
-            repr::E1::A(t) => match t {},
-        }
+        unreachable!()
     }
 }
 
 impl<S: repr::TupleSum> Sum<S> {
     pub fn new<T, U>(value: T) -> Self
     where
-        Repr<S>: repr::ReprMatch<T, U>,
+        S: repr::TupleMatch<T, U>,
+        U: Tag,
     {
-        Sum(repr::ReprMatch::new(value))
+        Sum {
+            tag: U::VALUE,
+            data: ManuallyDrop::new(S::from_data(value)),
+        }
     }
 
     pub fn type_marker(&self) -> PhantomData<S> {
         PhantomData
     }
 
-    pub fn repr(&self) -> &Repr<S> {
-        &self.0
-    }
-
-    pub fn into_repr(self) -> Repr<S> {
-        self.0
-    }
-
-    pub fn from_repr(repr: Repr<S>) -> Self {
-        Sum(repr)
-    }
-
     pub fn get<T, U>(&self) -> Option<&T>
     where
-        Repr<S>: repr::ReprMatch<T, U>,
+        S: repr::TupleMatch<T, U>,
+        U: Tag,
     {
-        repr::ReprMatch::get(&self.0)
+        if self.tag == U::VALUE {
+            Some(unsafe { &*S::as_ptr(&self.data) })
+        } else {
+            None
+        }
     }
 
     pub fn get_mut<T, U>(&mut self) -> Option<&mut T>
     where
-        Repr<S>: repr::ReprMatch<T, U>,
+        S: repr::TupleMatch<T, U>,
+        U: Tag,
     {
-        repr::ReprMatch::get_mut(&mut self.0)
+        if self.tag == U::VALUE {
+            Some(unsafe { &mut *S::as_mut_ptr(&mut self.data) })
+        } else {
+            None
+        }
     }
 }
 
-pub type Rem<S, T, U> = <<Repr<S> as repr::ReprMatch<T, U>>::Remainder as repr::Repr>::Tuple;
-pub type Substitute<S, T, T2, U> =
-    <<Repr<S> as repr::ReprMatch<T, U>>::Substitute<T2> as repr::Repr>::Tuple;
+pub type Rem<S, T, U> = <S as repr::TupleMatch<T, U>>::Remainder;
+pub type Substitute<S, T, T2, U> = <S as repr::TupleMatch<T, U>>::Substitute<T2>;
 
 impl<S: repr::TupleSum> Sum<S> {
     pub fn try_unwrap<T, U>(self) -> Result<T, Sum<Rem<S, T, U>>>
     where
-        Repr<S>: repr::ReprMatch<T, U>,
+        S: repr::TupleMatch<T, U>,
+        U: Tag,
     {
-        match repr::ReprMatch::try_unwrap(self.0) {
-            Ok(value) => Ok(value),
-            Err(err) => Err(Sum(err)),
+        let mut this = ManuallyDrop::new(self);
+        match S::try_unwrap(this.tag) {
+            Ok(()) => Ok(unsafe { S::into_data_unchecked(ManuallyDrop::take(&mut this.data)) }),
+            Err(tag) => unsafe {
+                let data = mem::transmute_copy(&this.data);
+                Err(Sum { tag, data })
+            },
         }
     }
 
     pub fn map<T, T2, U>(self, f: impl FnOnce(T) -> T2) -> Sum<Substitute<S, T, T2, U>>
     where
-        Repr<S>: repr::ReprMatch<T, U>,
+        S: repr::TupleMatch<T, U>,
+        U: Tag,
     {
-        Sum(repr::ReprMatch::map(self.0, f))
+        let mut this = ManuallyDrop::new(self);
+        match S::try_unwrap(this.tag) {
+            Ok(()) => {
+                let data = f(unsafe { S::into_data_unchecked(ManuallyDrop::take(&mut this.data)) });
+                Sum {
+                    tag: this.tag,
+                    data: ManuallyDrop::new(
+                        <Substitute<S, T, T2, U> as repr::TupleMatch<T2, U>>::from_data(data),
+                    ),
+                }
+            }
+            Err(_) => unsafe {
+                let data = mem::transmute_copy(&this.data);
+                Sum { tag: this.tag, data }
+            },
+        }
     }
 }
 
-pub type NarrowRem<S, S2, UMap> = <<<S as Tuple>::TupleList as range::TupleRange<
-    <S2 as Tuple>::TupleList,
-    UMap,
->>::Remainder as repr::Repr>::Tuple;
+pub type NarrowRem<S, S2, UMap> = <S as range::TupleRange<S2, UMap>>::Remainder;
 
 impl<S: repr::TupleSum> Sum<S> {
     pub fn narrow<S2, UMap>(self) -> Result<Sum<S2>, Sum<NarrowRem<S, S2, UMap>>>
     where
+        S: range::TupleRange<S2, UMap>,
         S2: repr::TupleSum,
-        S::TupleList: range::TupleRange<S2::TupleList, UMap>,
     {
-        <S::TupleList as range::TupleRange<S2::TupleList, UMap>>::narrow(self.0)
-            .map(Sum)
-            .map_err(Sum)
+        let this = ManuallyDrop::new(self);
+        unsafe {
+            match <S as range::TupleRange<S2, UMap>>::narrow_tag(this.tag) {
+                Ok(tag) => {
+                    let data = mem::transmute_copy(&this.data);
+                    Ok(Sum { tag, data })
+                }
+                Err(tag) => {
+                    let data = mem::transmute_copy(&this.data);
+                    Err(Sum { tag, data })
+                }
+            }
+        }
     }
 
     pub fn broaden<S2, UMap>(self) -> Sum<S2>
     where
-        S2: repr::TupleSum,
-        S2::TupleList: range::TupleRange<S::TupleList, UMap>,
+        S2: range::TupleRange<S, UMap>,
     {
-        Sum(<S2::TupleList as range::TupleRange<S::TupleList, UMap>>::broaden(self.0))
+        unsafe {
+            let tag = <S2 as range::TupleRange<S, UMap>>::broaden_tag(self.tag);
+            let mut data = MaybeUninit::<ManuallyDrop<S2::Repr>>::uninit();
+            data.as_mut_ptr()
+                .cast::<ManuallyDrop<S::Repr>>()
+                .write(ptr::read(&self.data));
+            let data = data.assume_init();
+            mem::forget(self);
+            Sum { tag, data }
+        }
     }
 }
 
-impl<S: repr::TupleSum> fmt::Debug for Sum<S>
-where
-    S::Repr: fmt::Debug,
-{
+impl<S: derive::TupleDebug> fmt::Debug for Sum<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{:?}", unsafe { S::debug(&self.data, self.tag) })
     }
 }
 
-impl<S: repr::TupleSum> Clone for Sum<S>
-where
-    S::Repr: Clone,
-{
+impl<S: repr::TupleSum> Drop for Sum<S> {
+    fn drop(&mut self) {
+        unsafe { S::drop(&mut self.data, self.tag) }
+    }
+}
+
+impl<S: derive::TupleClone> Clone for Sum<S> {
     fn clone(&self) -> Self {
-        Sum(self.0.clone())
+        Sum {
+            tag: self.tag,
+            data: unsafe { S::clone(&self.data, self.tag) },
+        }
     }
 }
 
-impl<S: repr::TupleSum> Copy for Sum<S> where S::Repr: Copy {}
-
-impl<S: repr::TupleSum, T: repr::TupleSum> PartialEq<Sum<T>> for Sum<S>
-where
-    S::Repr: PartialEq<T::Repr>,
-{
-    fn eq(&self, other: &Sum<T>) -> bool {
-        self.0 == other.0
+impl<S: derive::TuplePartialEq> PartialEq for Sum<S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.tag == other.tag && unsafe { S::eq(&self.data, &other.data, self.tag) }
     }
 }
 
-impl<S: repr::TupleSum> Eq for Sum<S> where S::Repr: Eq {}
+impl<S: derive::TuplePartialEq + Eq> Eq for Sum<S> {}
 
-impl<S: repr::TupleSum, T: repr::TupleSum> PartialOrd<Sum<T>> for Sum<S>
-where
-    S::Repr: PartialOrd<T::Repr>,
-{
-    fn partial_cmp(&self, other: &Sum<T>) -> Option<core::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
+impl<S: derive::TuplePartialOrd> PartialOrd for Sum<S> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        match self.tag.cmp(&other.tag) {
+            core::cmp::Ordering::Equal => unsafe {
+                S::partial_cmp(&self.data, &other.data, self.tag)
+            },
+            other => Some(other),
+        }
     }
 }
 
-impl<S: repr::TupleSum> Ord for Sum<S>
-where
-    S::Repr: Ord,
-{
+impl<S: derive::TupleOrd + Eq> Ord for Sum<S> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.0.cmp(&other.0)
+        self.tag
+            .cmp(&other.tag)
+            .then_with(|| unsafe { S::cmp(&self.data, &other.data, self.tag) })
     }
 }
 
-impl<S: repr::TupleSum> core::hash::Hash for Sum<S>
-where
-    S::Repr: core::hash::Hash,
-{
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state)
+impl<S: derive::TupleHash> Hash for Sum<S> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.tag.hash(state);
+        unsafe { S::hash(&self.data, self.tag, state) }
     }
 }
 
@@ -213,9 +254,9 @@ mod tests {
 
     #[test]
     fn basic() {
-        type T0 = (u32,);
-        type T1 = (u32, String);
-        type T2 = (u32, String, u32);
+        type T0 = (u32, ());
+        type T1 = (u32, (String, ()));
+        type T2 = (u32, (String, (u32, ())));
 
         let sum: Sum<T0> = 12345.into();
         assert_eq!(sum.get(), Some(&12345));
@@ -231,7 +272,7 @@ mod tests {
         assert_eq!(sum.get(), Some(&"Hello World!".to_string()));
 
         let sum: Sum<T1> = sum.narrow::<_, umap![U0, U0]>().unwrap();
-        let sum: Sum<(String,)> = sum.narrow::<T0, _>().unwrap_err();
+        let sum: Sum<(String, ())> = sum.narrow::<T0, _>().unwrap_err();
         assert_eq!(*sum, "Hello World!");
     }
 }

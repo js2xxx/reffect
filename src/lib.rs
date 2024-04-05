@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 #![no_std]
 #![deny(future_incompatible)]
 #![deny(rust_2018_idioms)]
@@ -15,5 +16,13 @@ pub mod util;
 #[cfg(test)]
 extern crate std;
 
+pub use reffect_macros::{effectful, effectful_block};
+
 pub use self::traits::*;
-pub use reffect_macros::{effectful_block, effectful};
+
+#[macro_export]
+macro_rules! List {
+    ($($t:ty),* $(,)?) => {
+        $crate::Sum!(@FORWARD $($t,)*)
+    };
+}

@@ -19,18 +19,18 @@ impl Effect for Increment {
     type Resume = u32;
 }
 
-#[effectful(Infallible, Log)]
+#[effectful(Log)]
 fn log_value<T: std::fmt::Debug>(value: T) -> T {
     yield Log(format!("{:?}", value));
     value
 }
 
-#[effectful(Infallible, Increment)]
+#[effectful(Increment)]
 fn increment(value: u32) -> u32 {
     yield Increment(value)
 }
 
-#[effectful(Infallible, Log, Increment)]
+#[effectful(Log, Increment)]
 fn test_func() -> u32 {
     let value = log_value(1).await;
     let value = increment(value).await;
@@ -39,11 +39,11 @@ fn test_func() -> u32 {
 }
 
 let ret = test_func()
-    .handle(|log: Sum<(Log,)>| {
+    .handle(|log: Sum![Log]| {
         println!("{}", log.0);
         Continue(Sum::new(Log::tag(())))
     })
-    .handle(|mut increment: Sum<(Increment,)>| {
+    .handle(|mut increment: Sum![Increment]| {
         increment.0 += 1;
         Continue(increment.map(|i| Increment::tag(i.0)))
     })
