@@ -51,3 +51,13 @@ let ret = test_func()
 assert_eq!(ret, 2);
 
 ```
+
+## TODO
+
+- [ ] `handler!(Eff1(x) | Eff2(x) => todo!())`
+  - [ ] Expand root `continue` to `ControlFlow::Continue`
+  - [ ] Effectful handlers (`transform`)
+- [ ] `#[group]` on trait definition
+- [ ] `#[group_handler]` on trait implementation
+  - [ ] Effectful group handlers
+- [ ] `catch!(expr.await { Eff1(x) => todo!() })` (In-place catch)
