@@ -1,30 +1,30 @@
 use super::repr::*;
 use crate::util::tag::{Tag, UInt, UTerm};
 
-pub trait TupleCount {
+pub trait Count {
     type Count: Tag;
 }
 
-impl TupleCount for () {
+impl Count for () {
     type Count = UTerm;
 }
 
-impl<Head, Tail> TupleCount for (Head, Tail)
+impl<Head, Tail> Count for (Head, Tail)
 where
-    Tail: TupleCount,
+    Tail: Count,
 {
     type Count = UInt<Tail::Count>;
 }
 
-pub trait TupleRange<TList: TupleSum, UList>: TupleSum {
-    type Remainder: TupleSum;
+pub trait SplitList<TList: SumList, UList>: SumList {
+    type Remainder: SumList;
 
     fn broaden_tag(tag: u8) -> u8;
 
     fn narrow_tag(tag: u8) -> Result<u8, u8>;
 }
 
-impl<T: TupleSum> TupleRange<(), ()> for T {
+impl<T: SumList> SplitList<(), ()> for T {
     type Remainder = Self;
 
     fn broaden_tag(tag: u8) -> u8 {
@@ -37,30 +37,30 @@ impl<T: TupleSum> TupleRange<(), ()> for T {
 }
 
 impl<SubHead, SubTail, SuperHead, SuperTail, HeadTag: Tag, TailTag>
-    TupleRange<(SubHead, SubTail), (HeadTag, TailTag)> for (SuperHead, SuperTail)
+    SplitList<(SubHead, SubTail), (HeadTag, TailTag)> for (SuperHead, SuperTail)
 where
-    SubTail: TupleSum,
-    SuperTail: TupleSum,
+    SubTail: SumList,
+    SuperTail: SumList,
 
-    (SuperHead, SuperTail): TupleMatch<SubHead, HeadTag>,
+    (SuperHead, SuperTail): Split<SubHead, HeadTag>,
 
-    <(SuperHead, SuperTail) as TupleMatch<SubHead, HeadTag>>::Remainder:
-        TupleRange<SubTail, TailTag>,
+    <(SuperHead, SuperTail) as Split<SubHead, HeadTag>>::Remainder: SplitList<SubTail, TailTag>,
 {
     type Remainder =
-        <<(SuperHead, SuperTail) as TupleMatch<SubHead, HeadTag>>::Remainder as TupleRange<
+        <<(SuperHead, SuperTail) as Split<SubHead, HeadTag>>::Remainder as SplitList<
             SubTail,
             TailTag,
         >>::Remainder;
 
     fn broaden_tag(tag: u8) -> u8 {
-        match <(SubHead, SubTail) as TupleMatch<SubHead, UTerm>>::try_unwrap(tag) {
+        match <(SubHead, SubTail) as Split<SubHead, UTerm>>::try_unwrap(tag) {
             Ok(()) => HeadTag::VALUE,
             Err(remainder) => {
-                let ret = <<(SuperHead, SuperTail) as TupleMatch<SubHead, HeadTag>>::Remainder>::broaden_tag(
+                let ret =
+                    <<(SuperHead, SuperTail) as Split<SubHead, HeadTag>>::Remainder>::broaden_tag(
                         remainder,
                     );
-                <(SuperHead, SuperTail) as TupleMatch<SubHead, HeadTag>>::from_remainder(ret)
+                <(SuperHead, SuperTail) as Split<SubHead, HeadTag>>::from_remainder(ret)
             }
         }
     }
@@ -69,21 +69,24 @@ where
         Ok(match Self::try_unwrap(tag) {
             Ok(()) => 0,
             Err(remainder) => {
-                let ret = <<(SuperHead, SuperTail) as TupleMatch<SubHead, HeadTag>>::Remainder>::narrow_tag(remainder)?;
-                <(SubHead, SubTail) as TupleMatch<SubHead, UTerm>>::from_remainder(ret)
+                let ret =
+                    <<(SuperHead, SuperTail) as Split<SubHead, HeadTag>>::Remainder>::narrow_tag(
+                        remainder,
+                    )?;
+                <(SubHead, SubTail) as Split<SubHead, UTerm>>::from_remainder(ret)
             }
         })
     }
 }
 
-pub trait TupleBirange<TList: TupleSum, UList, RemUList>:
-    TupleRange<TList, UList> + TupleRange<<Self as TupleRange<TList, UList>>::Remainder, RemUList>
+pub trait ContainsList<TList: SumList, UList, RemUList>:
+    SplitList<TList, UList> + SplitList<<Self as SplitList<TList, UList>>::Remainder, RemUList>
 {
 }
 
-impl<S, T, U, R> TupleBirange<T, U, R> for S
+impl<S, T, U, R> ContainsList<T, U, R> for S
 where
-    S: TupleRange<T, U> + TupleRange<<Self as TupleRange<T, U>>::Remainder, R>,
-    T: TupleSum,
+    S: SplitList<T, U> + SplitList<<Self as SplitList<T, U>>::Remainder, R>,
+    T: SumList,
 {
 }

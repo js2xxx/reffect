@@ -1,6 +1,6 @@
 use core::{mem::ManuallyDrop, ptr};
 
-use super::range::TupleCount;
+use super::range::Count;
 use crate::util::tag::{Tag, UInt, UTerm};
 
 #[doc(hidden)]
@@ -14,7 +14,7 @@ pub union Cons<T, U> {
     pub(super) next: ManuallyDrop<U>,
 }
 
-pub trait TupleSum: TupleCount {
+pub trait SumList: Count {
     type Repr;
     type Tags<U>;
 
@@ -22,16 +22,16 @@ pub trait TupleSum: TupleCount {
     unsafe fn drop(this: &mut ManuallyDrop<Self::Repr>, tag: u8);
 }
 
-impl TupleSum for () {
+impl SumList for () {
     type Repr = Nil;
     type Tags<U> = ();
 
     unsafe fn drop(_: &mut ManuallyDrop<Nil>, _: u8) {}
 }
 
-impl<Head, Tail> TupleSum for (Head, Tail)
+impl<Head, Tail> SumList for (Head, Tail)
 where
-    Tail: TupleSum,
+    Tail: SumList,
 {
     type Repr = Cons<Head, Tail::Repr>;
     type Tags<U> = (U, Tail::Tags<U>);
@@ -45,7 +45,7 @@ where
     }
 }
 
-pub trait TupleMatch<T, U: Tag>: TupleSum {
+pub trait Split<T, U: Tag>: SumList {
     #[doc(hidden)]
     fn from_data(data: T) -> Self::Repr;
 
@@ -58,8 +58,8 @@ pub trait TupleMatch<T, U: Tag>: TupleSum {
     #[doc(hidden)]
     fn as_mut_ptr(this: &mut Self::Repr) -> *mut T;
 
-    type Remainder: TupleSum;
-    type Substitute<T2>: TupleMatch<T2, U>;
+    type Remainder: SumList;
+    type Substitute<T2>: Split<T2, U>;
 
     #[doc(hidden)]
     fn from_remainder(tag: u8) -> u8;
@@ -68,9 +68,9 @@ pub trait TupleMatch<T, U: Tag>: TupleSum {
     fn try_unwrap(tag: u8) -> Result<(), u8>;
 }
 
-impl<Head, Tail> TupleMatch<Head, UTerm> for (Head, Tail)
+impl<Head, Tail> Split<Head, UTerm> for (Head, Tail)
 where
-    Tail: TupleSum,
+    Tail: SumList,
 {
     fn from_data(data: Head) -> Self::Repr {
         Cons { data: ManuallyDrop::new(data) }
@@ -107,9 +107,9 @@ where
     }
 }
 
-impl<Head, Tail, T, U: Tag> TupleMatch<T, UInt<U>> for (Head, Tail)
+impl<Head, Tail, T, U: Tag> Split<T, UInt<U>> for (Head, Tail)
 where
-    Tail: TupleMatch<T, U>,
+    Tail: Split<T, U>,
 {
     fn from_data(data: T) -> Self::Repr {
         Cons {
@@ -133,7 +133,7 @@ where
         ptr
     }
 
-    type Remainder = (Head, <Tail as TupleMatch<T, U>>::Remainder);
+    type Remainder = (Head, <Tail as Split<T, U>>::Remainder);
     type Substitute<T2> = (Head, Tail::Substitute<T2>);
 
     fn from_remainder(tag: u8) -> u8 {

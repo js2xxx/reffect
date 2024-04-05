@@ -14,7 +14,7 @@ use super::Begin;
 use crate::{
     util::{
         sum_type::{
-            range::{TupleBirange, TupleRange},
+            range::{ContainsList, SplitList},
             NarrowRem,
         },
         tag::U1,
@@ -51,9 +51,9 @@ where
 
     NarrowRem<Y, E, UL>: EffectList<ResumeList = NarrowRem<Y::ResumeList, E::ResumeList, UL>>,
 
-    Y: TupleBirange<E, UL, RemUL>,
-    Y::ResumeList: TupleBirange<E::ResumeList, UL, RemUL>,
-    (Begin, Y::ResumeList): TupleRange<Y::ResumeList, Y::Tags<U1>>,
+    Y: ContainsList<E, UL, RemUL>,
+    Y::ResumeList: ContainsList<E::ResumeList, UL, RemUL>,
+    (Begin, Y::ResumeList): SplitList<Y::ResumeList, Y::Tags<U1>>,
 {
     type Yield = Sum<NarrowRem<Y, E, UL>>;
     type Return = Coro::Return;

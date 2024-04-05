@@ -1,12 +1,12 @@
 use core::{fmt, hash::Hasher, mem::ManuallyDrop};
 
-use super::repr::{Cons, Nil, TupleSum};
+use super::repr::{Cons, Nil, SumList};
 
-pub(super) trait TupleClone: TupleSum {
+pub(super) trait SumClone: SumList {
     unsafe fn clone(this: &Self::Repr, tag: u8) -> ManuallyDrop<Self::Repr>;
 }
 
-impl TupleClone for () {
+impl SumClone for () {
     unsafe fn clone(_: &Self::Repr, _: u8) -> ManuallyDrop<Self::Repr>
     where
         Self: Clone,
@@ -15,10 +15,10 @@ impl TupleClone for () {
     }
 }
 
-impl<Head, Tail> TupleClone for (Head, Tail)
+impl<Head, Tail> SumClone for (Head, Tail)
 where
     Head: Clone,
-    Tail: TupleClone,
+    Tail: SumClone,
 {
     unsafe fn clone(this: &Self::Repr, tag: u8) -> ManuallyDrop<Self::Repr> {
         ManuallyDrop::new(if tag == 0 {
@@ -31,20 +31,20 @@ where
     }
 }
 
-pub(super) trait TupleDebug: TupleSum {
+pub(super) trait SumDebug: SumList {
     unsafe fn debug(this: &Self::Repr, tag: u8) -> &dyn fmt::Debug;
 }
 
-impl TupleDebug for () {
+impl SumDebug for () {
     unsafe fn debug(_: &Self::Repr, _: u8) -> &dyn fmt::Debug {
         &()
     }
 }
 
-impl<Head, Tail> TupleDebug for (Head, Tail)
+impl<Head, Tail> SumDebug for (Head, Tail)
 where
     Head: fmt::Debug,
-    Tail: TupleDebug,
+    Tail: SumDebug,
 {
     unsafe fn debug(this: &Self::Repr, tag: u8) -> &dyn fmt::Debug {
         if tag == 0 {
@@ -55,20 +55,20 @@ where
     }
 }
 
-pub(super) trait TuplePartialEq: TupleSum {
+pub(super) trait SumPartialEq: SumList {
     unsafe fn eq(this: &Self::Repr, other: &Self::Repr, tag: u8) -> bool;
 }
 
-impl TuplePartialEq for () {
+impl SumPartialEq for () {
     unsafe fn eq(_: &Self::Repr, _: &Self::Repr, _: u8) -> bool {
         true
     }
 }
 
-impl<Head, Tail> TuplePartialEq for (Head, Tail)
+impl<Head, Tail> SumPartialEq for (Head, Tail)
 where
     Head: PartialEq,
-    Tail: TuplePartialEq,
+    Tail: SumPartialEq,
 {
     unsafe fn eq(this: &Self::Repr, other: &Self::Repr, tag: u8) -> bool {
         if tag == 0 {
@@ -79,7 +79,7 @@ where
     }
 }
 
-pub(super) trait TuplePartialOrd: TupleSum + TuplePartialEq {
+pub(super) trait SumPartialOrd: SumList + SumPartialEq {
     unsafe fn partial_cmp(
         this: &Self::Repr,
         other: &Self::Repr,
@@ -87,16 +87,16 @@ pub(super) trait TuplePartialOrd: TupleSum + TuplePartialEq {
     ) -> Option<core::cmp::Ordering>;
 }
 
-impl TuplePartialOrd for () {
+impl SumPartialOrd for () {
     unsafe fn partial_cmp(_: &Self::Repr, _: &Self::Repr, _: u8) -> Option<core::cmp::Ordering> {
         Some(core::cmp::Ordering::Equal)
     }
 }
 
-impl<Head, Tail> TuplePartialOrd for (Head, Tail)
+impl<Head, Tail> SumPartialOrd for (Head, Tail)
 where
     Head: PartialOrd,
-    Tail: TuplePartialOrd,
+    Tail: SumPartialOrd,
 {
     unsafe fn partial_cmp(
         this: &Self::Repr,
@@ -111,20 +111,20 @@ where
     }
 }
 
-pub(super) trait TupleOrd: TupleSum + TuplePartialOrd {
+pub(super) trait SumOrd: SumList + SumPartialOrd {
     unsafe fn cmp(this: &Self::Repr, other: &Self::Repr, tag: u8) -> core::cmp::Ordering;
 }
 
-impl TupleOrd for () {
+impl SumOrd for () {
     unsafe fn cmp(_: &Self::Repr, _: &Self::Repr, _: u8) -> core::cmp::Ordering {
         core::cmp::Ordering::Equal
     }
 }
 
-impl<Head, Tail> TupleOrd for (Head, Tail)
+impl<Head, Tail> SumOrd for (Head, Tail)
 where
     Head: Ord,
-    Tail: TupleOrd,
+    Tail: SumOrd,
 {
     unsafe fn cmp(this: &Self::Repr, other: &Self::Repr, tag: u8) -> core::cmp::Ordering {
         if tag == 0 {
@@ -135,18 +135,18 @@ where
     }
 }
 
-pub(super) trait TupleHash: TupleSum {
+pub(super) trait SumHash: SumList {
     unsafe fn hash<H: Hasher>(this: &Self::Repr, tag: u8, state: &mut H);
 }
 
-impl TupleHash for () {
+impl SumHash for () {
     unsafe fn hash<H: Hasher>(_: &Self::Repr, _: u8, _: &mut H) {}
 }
 
-impl<Head, Tail> TupleHash for (Head, Tail)
+impl<Head, Tail> SumHash for (Head, Tail)
 where
     Head: core::hash::Hash,
-    Tail: TupleHash,
+    Tail: SumHash,
 {
     unsafe fn hash<H: Hasher>(this: &Self::Repr, tag: u8, state: &mut H) {
         if tag == 0 {

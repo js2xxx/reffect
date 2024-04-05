@@ -15,7 +15,7 @@ pub use tuple_list::tuple_list_type as umap;
 
 use super::tag::{Tag, UTerm};
 
-pub type Repr<S> = <S as repr::TupleSum>::Repr;
+pub type Repr<S> = <S as repr::SumList>::Repr;
 
 #[macro_export]
 macro_rules! Sum {
@@ -26,7 +26,7 @@ macro_rules! Sum {
     };
 }
 
-pub struct Sum<S: repr::TupleSum> {
+pub struct Sum<S: repr::SumList> {
     tag: u8,
     data: ManuallyDrop<Repr<S>>,
 }
@@ -41,13 +41,13 @@ impl<T> Deref for Sum![T] {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { &*<(T, ()) as repr::TupleMatch<T, UTerm>>::as_ptr(&self.data) }
+        unsafe { &*<(T, ()) as repr::Split<T, UTerm>>::as_ptr(&self.data) }
     }
 }
 
 impl<T> DerefMut for Sum![T] {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *<(T, ()) as repr::TupleMatch<T, UTerm>>::as_mut_ptr(&mut self.data) }
+        unsafe { &mut *<(T, ()) as repr::Split<T, UTerm>>::as_mut_ptr(&mut self.data) }
     }
 }
 
@@ -66,10 +66,10 @@ impl Sum![] {
     }
 }
 
-impl<S: repr::TupleSum> Sum<S> {
+impl<S: repr::SumList> Sum<S> {
     pub fn new<T, U>(value: T) -> Self
     where
-        S: repr::TupleMatch<T, U>,
+        S: repr::Split<T, U>,
         U: Tag,
     {
         Sum {
@@ -84,7 +84,7 @@ impl<S: repr::TupleSum> Sum<S> {
 
     pub fn get<T, U>(&self) -> Option<&T>
     where
-        S: repr::TupleMatch<T, U>,
+        S: repr::Split<T, U>,
         U: Tag,
     {
         if self.tag == U::VALUE {
@@ -96,7 +96,7 @@ impl<S: repr::TupleSum> Sum<S> {
 
     pub fn get_mut<T, U>(&mut self) -> Option<&mut T>
     where
-        S: repr::TupleMatch<T, U>,
+        S: repr::Split<T, U>,
         U: Tag,
     {
         if self.tag == U::VALUE {
@@ -107,13 +107,13 @@ impl<S: repr::TupleSum> Sum<S> {
     }
 }
 
-pub type Rem<S, T, U> = <S as repr::TupleMatch<T, U>>::Remainder;
-pub type Substitute<S, T, T2, U> = <S as repr::TupleMatch<T, U>>::Substitute<T2>;
+pub type Rem<S, T, U> = <S as repr::Split<T, U>>::Remainder;
+pub type Substitute<S, T, T2, U> = <S as repr::Split<T, U>>::Substitute<T2>;
 
-impl<S: repr::TupleSum> Sum<S> {
+impl<S: repr::SumList> Sum<S> {
     pub fn try_unwrap<T, U>(self) -> Result<T, Sum<Rem<S, T, U>>>
     where
-        S: repr::TupleMatch<T, U>,
+        S: repr::Split<T, U>,
         U: Tag,
     {
         let mut this = ManuallyDrop::new(self);
@@ -128,7 +128,7 @@ impl<S: repr::TupleSum> Sum<S> {
 
     pub fn map<T, T2, U>(self, f: impl FnOnce(T) -> T2) -> Sum<Substitute<S, T, T2, U>>
     where
-        S: repr::TupleMatch<T, U>,
+        S: repr::Split<T, U>,
         U: Tag,
     {
         let mut this = ManuallyDrop::new(self);
@@ -138,7 +138,7 @@ impl<S: repr::TupleSum> Sum<S> {
                 Sum {
                     tag: this.tag,
                     data: ManuallyDrop::new(
-                        <Substitute<S, T, T2, U> as repr::TupleMatch<T2, U>>::from_data(data),
+                        <Substitute<S, T, T2, U> as repr::Split<T2, U>>::from_data(data),
                     ),
                 }
             }
@@ -150,17 +150,17 @@ impl<S: repr::TupleSum> Sum<S> {
     }
 }
 
-pub type NarrowRem<S, S2, UMap> = <S as range::TupleRange<S2, UMap>>::Remainder;
+pub type NarrowRem<S, S2, UMap> = <S as range::SplitList<S2, UMap>>::Remainder;
 
-impl<S: repr::TupleSum> Sum<S> {
+impl<S: repr::SumList> Sum<S> {
     pub fn narrow<S2, UMap>(self) -> Result<Sum<S2>, Sum<NarrowRem<S, S2, UMap>>>
     where
-        S: range::TupleRange<S2, UMap>,
-        S2: repr::TupleSum,
+        S: range::SplitList<S2, UMap>,
+        S2: repr::SumList,
     {
         let this = ManuallyDrop::new(self);
         unsafe {
-            match <S as range::TupleRange<S2, UMap>>::narrow_tag(this.tag) {
+            match <S as range::SplitList<S2, UMap>>::narrow_tag(this.tag) {
                 Ok(tag) => {
                     let data = mem::transmute_copy(&this.data);
                     Ok(Sum { tag, data })
@@ -175,10 +175,10 @@ impl<S: repr::TupleSum> Sum<S> {
 
     pub fn broaden<S2, UMap>(self) -> Sum<S2>
     where
-        S2: range::TupleRange<S, UMap>,
+        S2: range::SplitList<S, UMap>,
     {
         unsafe {
-            let tag = <S2 as range::TupleRange<S, UMap>>::broaden_tag(self.tag);
+            let tag = <S2 as range::SplitList<S, UMap>>::broaden_tag(self.tag);
             let mut data = MaybeUninit::<ManuallyDrop<S2::Repr>>::uninit();
             data.as_mut_ptr()
                 .cast::<ManuallyDrop<S::Repr>>()
@@ -190,19 +190,19 @@ impl<S: repr::TupleSum> Sum<S> {
     }
 }
 
-impl<S: derive::TupleDebug> fmt::Debug for Sum<S> {
+impl<S: derive::SumDebug> fmt::Debug for Sum<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", unsafe { S::debug(&self.data, self.tag) })
     }
 }
 
-impl<S: repr::TupleSum> Drop for Sum<S> {
+impl<S: repr::SumList> Drop for Sum<S> {
     fn drop(&mut self) {
         unsafe { S::drop(&mut self.data, self.tag) }
     }
 }
 
-impl<S: derive::TupleClone> Clone for Sum<S> {
+impl<S: derive::SumClone> Clone for Sum<S> {
     fn clone(&self) -> Self {
         Sum {
             tag: self.tag,
@@ -211,15 +211,15 @@ impl<S: derive::TupleClone> Clone for Sum<S> {
     }
 }
 
-impl<S: derive::TuplePartialEq> PartialEq for Sum<S> {
+impl<S: derive::SumPartialEq> PartialEq for Sum<S> {
     fn eq(&self, other: &Self) -> bool {
         self.tag == other.tag && unsafe { S::eq(&self.data, &other.data, self.tag) }
     }
 }
 
-impl<S: derive::TuplePartialEq + Eq> Eq for Sum<S> {}
+impl<S: derive::SumPartialEq + Eq> Eq for Sum<S> {}
 
-impl<S: derive::TuplePartialOrd> PartialOrd for Sum<S> {
+impl<S: derive::SumPartialOrd> PartialOrd for Sum<S> {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         match self.tag.cmp(&other.tag) {
             core::cmp::Ordering::Equal => unsafe {
@@ -230,7 +230,7 @@ impl<S: derive::TuplePartialOrd> PartialOrd for Sum<S> {
     }
 }
 
-impl<S: derive::TupleOrd + Eq> Ord for Sum<S> {
+impl<S: derive::SumOrd + Eq> Ord for Sum<S> {
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
         self.tag
             .cmp(&other.tag)
@@ -238,7 +238,7 @@ impl<S: derive::TupleOrd + Eq> Ord for Sum<S> {
     }
 }
 
-impl<S: derive::TupleHash> Hash for Sum<S> {
+impl<S: derive::SumHash> Hash for Sum<S> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.tag.hash(state);
         unsafe { S::hash(&self.data, self.tag, state) }

@@ -15,7 +15,7 @@ pub use self::{
 use crate::{
     util::{
         sum_type::{
-            range::{TupleBirange, TupleRange},
+            range::{ContainsList, SplitList},
             NarrowRem,
         },
         tuple::ConcatList,
@@ -71,8 +71,8 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         E: EffectList,
         HY: EffectList,
 
-        Y: EffectList + TupleBirange<E, EUL, RemEUL> + TupleRange<HY, HUL>,
-        Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL> + TupleRange<HY::ResumeList, HUL>,
+        Y: EffectList + ContainsList<E, EUL, RemEUL> + SplitList<HY, HUL>,
+        Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL> + SplitList<HY::ResumeList, HUL>,
     {
         transform(self, trans)
     }
@@ -89,8 +89,8 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
         HY::ResumeList: ConcatList<NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
 
-        Y: EffectList + TupleBirange<E, EUL, RemEUL>,
-        Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL>,
+        Y: EffectList + ContainsList<E, EUL, RemEUL>,
+        Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
     {
         transform(self, trans)
     }

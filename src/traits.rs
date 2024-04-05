@@ -5,7 +5,7 @@ use core::{
 
 use crate::{
     adapter::Begin,
-    util::{sum_type::repr::TupleSum, Sum},
+    util::{sum_type::repr::SumList, Sum},
 };
 
 pub trait Effect {
@@ -34,8 +34,8 @@ macro_rules! Resumes {
     };
 }
 
-pub trait EffectList: TupleSum {
-    type ResumeList: TupleSum;
+pub trait EffectList: SumList {
+    type ResumeList: SumList;
 }
 
 impl EffectList for () {
@@ -44,8 +44,8 @@ impl EffectList for () {
 
 impl<T: Effect, U: EffectList> EffectList for (T, U)
 where
-    (T, U): TupleSum,
-    (ResumeTy<T>, U::ResumeList): TupleSum,
+    (T, U): SumList,
+    (ResumeTy<T>, U::ResumeList): SumList,
 {
     type ResumeList = (ResumeTy<T>, U::ResumeList);
 }

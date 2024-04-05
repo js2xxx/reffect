@@ -4,7 +4,7 @@ pub(crate) mod tuple;
 
 use core::{any::type_name, marker::PhantomData};
 
-use self::sum_type::{range::TupleRange, repr::TupleSum};
+use self::sum_type::{range::SplitList, repr::SumList};
 pub use self::sum_type::{umap, Sum};
 use crate::{adapter::Begin, Effect, EffectList, ResumeTy, Sum};
 
@@ -22,9 +22,9 @@ pub fn untag_effect<T: Effect>(r: Sum![ResumeTy<T>], _: PhantomData<(T, ())>) ->
 
 fn narrow_effect_impl<R, RR, E, UL>(r: Sum<R>, marker: PhantomData<E>) -> Sum<RR>
 where
-    RR: TupleSum,
+    RR: SumList,
     E: EffectList,
-    R: TupleRange<RR, UL>,
+    R: SplitList<RR, UL>,
 {
     match r.narrow() {
         Ok(state) => state,
@@ -39,7 +39,7 @@ where
 pub fn narrow_effect<R, E, UL>(r: Sum<R>, marker: PhantomData<E>) -> Sum<E::ResumeList>
 where
     E: EffectList,
-    R: TupleRange<E::ResumeList, UL>,
+    R: SplitList<E::ResumeList, UL>,
 {
     narrow_effect_impl(r, marker)
 }
@@ -50,7 +50,7 @@ pub fn narrow_effect_prefixed<R, E, UL>(
 ) -> Sum<(Begin, E::ResumeList)>
 where
     E: EffectList,
-    R: TupleRange<(Begin, E::ResumeList), UL>,
+    R: SplitList<(Begin, E::ResumeList), UL>,
 {
     narrow_effect_impl(r, marker)
 }

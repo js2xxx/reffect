@@ -15,8 +15,8 @@ use crate::{
     util::{
         narrow_effect_prefixed,
         sum_type::{
-            range::{TupleBirange, TupleCount, TupleRange},
-            repr::TupleSum,
+            range::{ContainsList, Count, SplitList},
+            repr::SumList,
             NarrowRem,
         },
         tag::{UTerm, U1},
@@ -61,13 +61,13 @@ where
     OY: EffectList,
     NarrowRem<Y, E, EUL>: EffectList<ResumeList = NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
 
-    Y: TupleBirange<E, EUL, RemEUL>,
-    Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL>,
-    (Begin, Y::ResumeList): TupleRange<Y::ResumeList, Y::Tags<U1>>,
+    Y: ContainsList<E, EUL, RemEUL>,
+    Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
+    (Begin, Y::ResumeList): SplitList<Y::ResumeList, Y::Tags<U1>>,
 
-    OY: TupleRange<HY, HOUL> + TupleRange<NarrowRem<Y, E, EUL>, OUL>,
-    OY::ResumeList: TupleRange<HY::ResumeList, HOUL>
-        + TupleRange<NarrowRem<Y::ResumeList, E::ResumeList, EUL>, OUL>,
+    OY: SplitList<HY, HOUL> + SplitList<NarrowRem<Y, E, EUL>, OUL>,
+    OY::ResumeList: SplitList<HY::ResumeList, HOUL>
+        + SplitList<NarrowRem<Y::ResumeList, E::ResumeList, EUL>, OUL>,
 {
     type Yield = Sum<OY>;
     type Return = Coro::Return;
@@ -133,8 +133,8 @@ where
     E: EffectList,
     HY: EffectList,
 
-    Y: EffectList + TupleBirange<E, EUL, RemEUL> + TupleRange<HY, HUL>,
-    Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL> + TupleRange<HY::ResumeList, HUL>,
+    Y: EffectList + ContainsList<E, EUL, RemEUL> + SplitList<HY, HUL>,
+    Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL> + SplitList<HY::ResumeList, HUL>,
 {
     transform(coro, trans)
 }
@@ -147,8 +147,8 @@ pub type Transform1<Coro, Trans, H, Y, E, HY, EUL, RemEUL> = Transform<
     (
         EUL,
         RemEUL,
-        <HY as TupleSum>::Tags<UTerm>,
-        <NarrowRem<Y, E, EUL> as TupleSum>::Tags<<HY as TupleCount>::Count>,
+        <HY as SumList>::Tags<UTerm>,
+        <NarrowRem<Y, E, EUL> as SumList>::Tags<<HY as Count>::Count>,
     ),
 >;
 
@@ -165,8 +165,8 @@ where
     HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
     HY::ResumeList: ConcatList<NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
 
-    Y: EffectList + TupleBirange<E, EUL, RemEUL>,
-    Y::ResumeList: TupleBirange<E::ResumeList, EUL, RemEUL>,
+    Y: EffectList + ContainsList<E, EUL, RemEUL>,
+    Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
 {
     transform(coro, trans)
 }
