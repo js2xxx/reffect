@@ -11,7 +11,7 @@ use pin_project::pin_project;
 
 use crate::{
     adapter::Begin,
-    traits::IntoCoroutine,
+    effect::{EffectList, Effectful, IntoCoroutine},
     util::{
         narrow_effect_prefixed,
         sum_type::{
@@ -22,7 +22,6 @@ use crate::{
         tag::{UTerm, U1},
         Sum,
     },
-    EffectList, Effectful,
 };
 
 pub fn transform<Coro, Trans, H, MTypes, MULists>(

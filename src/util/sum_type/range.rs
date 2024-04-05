@@ -47,7 +47,6 @@ where
     type Output = <T::Output as ConcatList<Tail>>::Output;
 }
 
-
 pub trait SplitList<TList: SumList, UList>: SumList {
     type Remainder: SumList;
 

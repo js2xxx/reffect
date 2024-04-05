@@ -13,6 +13,7 @@ pub use self::{
     transform::{transform, transform0, transform1, Transform, Transform0, Transform1},
 };
 use crate::{
+    effect::{EffectList, Effectful},
     util::{
         sum_type::{
             range::{ConcatList, ContainsList, SplitList},
@@ -20,7 +21,7 @@ use crate::{
         },
         Sum,
     },
-    EffectList, Effectful, Sum,
+    Sum,
 };
 
 #[derive(Debug)]
@@ -107,10 +108,10 @@ mod test {
     use core::ops::{ControlFlow::*, Coroutine};
     use std::string::{String, ToString};
 
-    use super::{transform0, transform1, Begin, EffectfulExt};
+    use super::{Begin, EffectfulExt};
     use crate::{
-        self as reffect, effectful, effectful_block, util::Sum, Effect, Effectful, Effects, List,
-        ResumeTy, Resumes, Sum,
+        self as reffect, effect::ResumeTy, effectful, effectful_block, util::Sum, Effect,
+        Effectful, Effects, List, Resumes, Sum,
     };
 
     struct Eff1(u32);
@@ -169,14 +170,14 @@ mod test {
             Continue(Eff1::tag(r).into())
         });
 
-        let coro = transform0(coro, |eff: Effects![Eff2]| {
+        let coro = coro.transform0(|eff: Effects![Eff2]| {
             move |_: Resumes![Eff2]| {
                 let sum = yield eff.broaden::<List![Eff2], _>();
                 sum.narrow::<(ResumeTy<Eff2>, ()), _>().unwrap()
             }
         });
 
-        let coro = transform1(coro, |eff: Effects![Eff2]| {
+        let coro = coro.transform1(|eff: Effects![Eff2]| {
             move |_: Resumes![Eff3]| {
                 let r = yield eff
                     .map(|Eff2(c)| Eff3(c.to_string()))

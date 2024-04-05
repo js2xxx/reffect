@@ -30,7 +30,7 @@ macro_rules! Effects {
 #[macro_export]
 macro_rules! Resumes {
     ($($t:ty),* $(,)?) => {
-        $crate::Sum![$crate::adapter::Begin, $($crate::ResumeTy<$t>,)*]
+        $crate::Sum![$crate::adapter::Begin, $($crate::effect::ResumeTy<$t>,)*]
     };
 }
 

@@ -5,7 +5,11 @@ use core::{any::type_name, marker::PhantomData};
 
 use self::sum_type::{range::SplitList, repr::SumList};
 pub use self::sum_type::{umap, Sum};
-use crate::{adapter::Begin, Effect, EffectList, ResumeTy, Sum};
+use crate::{
+    adapter::Begin,
+    effect::{EffectList, ResumeTy},
+    Effect, Sum,
+};
 
 pub fn mark<T: ?Sized>(_: &T) -> PhantomData<T> {
     PhantomData

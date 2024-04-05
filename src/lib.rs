@@ -9,8 +9,8 @@
 #![feature(noop_waker)]
 
 pub mod adapter;
+pub mod effect;
 pub mod future;
-mod traits;
 pub mod util;
 
 #[cfg(test)]
@@ -18,7 +18,7 @@ extern crate std;
 
 pub use reffect_macros::{do_await, do_yield, effectful, effectful_block};
 
-pub use self::traits::*;
+pub use self::effect::{Effect, Effectful};
 
 #[macro_export]
 macro_rules! List {

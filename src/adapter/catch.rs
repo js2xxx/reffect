@@ -12,7 +12,7 @@ use pin_project::pin_project;
 
 use crate::{
     adapter::Begin,
-    traits::IntoCoroutine,
+    effect::{EffectList, IntoCoroutine},
     util::{
         narrow_effect_prefixed,
         sum_type::{
@@ -22,7 +22,6 @@ use crate::{
         tag::U1,
         Sum,
     },
-    EffectList,
 };
 
 pub fn catch<Coro, Trans, H, MTypes, MULists>(

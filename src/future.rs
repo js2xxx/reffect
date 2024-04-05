@@ -8,7 +8,7 @@ use core::{
 
 use pin_project::pin_project;
 
-use crate::{util::Sum, Effect, Effectful, Effects, IntoCoroutine, Resumes};
+use crate::{effect::IntoCoroutine, util::Sum, Effect, Effectful, Effects, Resumes};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Await;
@@ -53,7 +53,7 @@ where
 
     fn resume(self: Pin<&mut Self>, arg: Resumes![Await]) -> CoroutineState<Effects![Await], T> {
         self.with(|fut| {
-            let mut resume_ty = match arg.try_unwrap::<crate::ResumeTy<Await>, _>() {
+            let mut resume_ty = match arg.try_unwrap::<crate::effect::ResumeTy<Await>, _>() {
                 Ok(ty) => ty,
                 Err(_) => return CoroutineState::Yielded(Sum::new(Await)),
             };
@@ -123,7 +123,7 @@ mod test {
         task::{Context, Poll, Waker},
     };
 
-    use crate::{future::run, IntoCoroutine};
+    use crate::{effect::IntoCoroutine, future::run};
 
     #[test]
     fn test_async() {
