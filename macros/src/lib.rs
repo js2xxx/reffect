@@ -63,15 +63,18 @@ impl syn::visit_mut::VisitMut for DesugarExpr<'_> {
     }
 }
 
+fn parse_terminated<T, P>(input: syn::parse::ParseStream) -> syn::Result<Punctuated<T, P>>
+where
+    T: syn::parse::Parse,
+    P: syn::parse::Parse,
+{
+    Punctuated::parse_terminated_with(input, T::parse)
+}
+
 #[proc_macro]
 #[allow(non_snake_case)]
 pub fn EffectList(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    fn parse_effects(
-        input: syn::parse::ParseStream,
-    ) -> syn::Result<Punctuated<syn::Type, Token![,]>> {
-        input.parse_terminated(syn::Type::parse, Token![,])
-    }
-    match syn::parse::Parser::parse(parse_effects, input) {
+    match syn::parse::Parser::parse(parse_terminated::<syn::Type, Token![,]>, input) {
         Ok(effects) => {
             let expand_effect = crate::expr::expand_effect(effects);
             expand_effect.into_token_stream().into()
@@ -100,8 +103,10 @@ pub fn effectful(
 
 #[proc_macro]
 pub fn handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let handler = parse_macro_input!(input as handler::Handler);
-    handler::expand_handler(handler).into()
+    match syn::parse::Parser::parse(parse_terminated::<handler::Handler, Token![,]>, input) {
+        Ok(handlers) => handler::expand_handler(handlers).into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 #[proc_macro]

@@ -39,8 +39,10 @@ fn test_func() -> u32 {
 }
 
 let ret = test_func()
-    .handle(handler!(Log(s) => println!("{s}")))
-    .handle(handler!(Increment(i) => i + 1))
+    .handle(handler! {
+        Log(s) => println!("{s}"),
+        Increment(i) => i + 1,
+    })
     .run();
 assert_eq!(ret, 2);
 

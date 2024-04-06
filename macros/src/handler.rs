@@ -1,18 +1,23 @@
+use std::iter;
+
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{
     parse::Parse,
     parse_quote,
+    punctuated::Punctuated,
     visit::{self, Visit},
     visit_mut::{self, VisitMut},
     Expr, Ident, Lifetime, Pat, Token, Type,
 };
 
+// use crate::Args;
+
 #[derive(Default)]
 struct HandlerArgs {
     root_ident: Option<syn::PatIdent>,
-    effects: Vec<Type>,
-    effect_pats: Vec<Pat>,
+    heffects: Vec<Type>,
+    heffect_pats: Vec<Pat>,
 
     err: Option<syn::Error>,
 }
@@ -35,8 +40,8 @@ impl Visit<'_> for HandlerArgs {
                     qself: qself.clone(),
                     path: path.clone(),
                 });
-                self.effects.push(ty);
-                self.effect_pats
+                self.heffects.push(ty);
+                self.heffect_pats
                     .push(if let Some(mut pi) = self.root_ident.take() {
                         pi.subpat = Some((<Token![@]>::default(), Box::new(i.clone())));
                         Pat::Ident(pi)
@@ -81,27 +86,36 @@ impl Visit<'_> for HandlerArgs {
 }
 
 pub struct Handler {
+    // args: Option<Args>,
     root_label: Option<Lifetime>,
-    args: HandlerArgs,
+    hargs: HandlerArgs,
     expr: Expr,
 }
 
 impl Parse for Handler {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // let args = syn::Attribute::parse_outer(input).map(|attr| {
+        //     if matches!(attr.meta, syn::Meta::Path(_)) {
+        //         Ok(Args::default())
+        //     } else {
+        //         attr.parse_args()
+        //     }
+        // })??;
+
         let root_label: Option<Lifetime> = input.parse()?;
         if root_label.is_some() {
             let _: Token![:] = input.parse()?;
         }
 
         let pat = Pat::parse_multi(input)?;
-        let mut args = HandlerArgs::default();
-        args.visit_pat(&pat);
+        let mut hargs = HandlerArgs::default();
+        hargs.visit_pat(&pat);
 
-        if let Some(err) = args.err.take() {
+        if let Some(err) = hargs.err.take() {
             return Err(err);
         }
 
-        if args.effects.is_empty() {
+        if hargs.heffects.is_empty() {
             return Err(syn::Error::new(
                 Span::call_site(),
                 "cannot infer effect types; please specify at least one effect in the pattern",
@@ -111,7 +125,7 @@ impl Parse for Handler {
         let _: Token![=>] = input.parse()?;
         let expr: Expr = input.parse()?;
 
-        Ok(Handler { root_label, args, expr })
+        Ok(Handler { root_label, hargs, expr })
     }
 }
 
@@ -142,40 +156,34 @@ impl VisitMut for DesugarHandlerExpr {
     }
 }
 
-pub fn expand_handler(handler: Handler) -> proc_macro2::TokenStream {
-    let Handler { root_label, args, mut expr } = handler;
-    let HandlerArgs { mut effects, mut effect_pats, .. } = args;
-
+pub fn expand_handler(mut handlers: Punctuated<Handler, Token![,]>) -> proc_macro2::TokenStream {
     let base_ident = Ident::new("__effect_list", Span::call_site());
 
-    let effect_list = crate::expr::expand_effect(&effects);
+    let effect_list = crate::expr::expand_effect(handlers.iter().flat_map(|h| &h.hargs.heffects));
 
-    DesugarHandlerExpr { root_label }.visit_expr_mut(&mut expr);
+    let branches = handlers.iter_mut().flat_map(|handler| {
+        let Handler { root_label, hargs, expr } = handler;
+        let HandlerArgs { heffects, heffect_pats, .. } = hargs;
 
-    let last_branch = effects.pop().zip(effect_pats.pop()).map(|(effect, pat)| {
-        quote! {
-            let #pat = reffect::util::Sum::into_inner(#base_ident);
-            core::ops::ControlFlow::Continue(
-                reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
-            )
-        }
-    });
+        DesugarHandlerExpr { root_label: root_label.take() }.visit_expr_mut(expr);
 
-    let branches = effects.iter().zip(&effect_pats).map(|(effect, pat)| {
-        quote! {
-            let #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
-                Ok(#pat) => return core::ops::ControlFlow::Continue(
-                    reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
-                ),
-                Err(rem) => rem,
+        let iter = heffects.iter().zip(heffect_pats).zip(iter::repeat(&*expr));
+        iter.map(|((effect, pat), expr)| {
+            quote! {
+                let #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
+                    Ok(#pat) => return core::ops::ControlFlow::Continue(
+                        reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
+                    ),
+                    Err(rem) => rem,
+                }
             }
-        }
+        })
     });
 
     quote! {
         |#base_ident: reffect::util::Sum<#effect_list>| {
             #(#branches;)*
-            #last_branch
+            #base_ident.unreachable()
         }
     }
 }
