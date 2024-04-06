@@ -1,16 +1,14 @@
 mod catch;
 mod handle;
-mod transform;
 
 use core::{
-    ops::{Coroutine, CoroutineState::*},
+    ops::{ControlFlow, Coroutine, CoroutineState::*},
     pin::pin,
 };
 
 pub use self::{
-    catch::{catch, Catch},
+    catch::{catch, catch0, catch1, Catch, Catch0, Catch1},
     handle::{handle, Handle},
-    transform::{transform, transform0, transform1, Transform, Transform0, Transform1},
 };
 use crate::{
     effect::{EffectList, Effectful},
@@ -52,20 +50,13 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         catch(self, trans)
     }
 
-    fn transform<Trans, H, MTypes, MULists>(
+    fn catch0<Trans, E, H, HY, EUL, RemEUL, HUL>(
         self,
         trans: Trans,
-    ) -> Transform<Self, Trans, H, MTypes, MULists> {
-        transform(self, trans)
-    }
-
-    fn transform0<Trans, E, H, HY, EUL, RemEUL, HUL>(
-        self,
-        trans: Trans,
-    ) -> Transform0<Self, Trans, H, Y, E, HY, EUL, RemEUL, HUL>
+    ) -> self::catch::Catch0<Self, Trans, H, Y, E, HY, EUL, RemEUL, HUL>
     where
         Trans: FnMut(Sum<E>) -> H,
-        H: Effectful<HY, Return = Sum<E::ResumeList>>,
+        H: Effectful<HY, Return = ControlFlow<Self::Return, Sum<E::ResumeList>>>,
 
         E: EffectList,
         HY: EffectList,
@@ -73,16 +64,16 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         Y: EffectList + ContainsList<E, EUL, RemEUL> + SplitList<HY, HUL>,
         Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL> + SplitList<HY::ResumeList, HUL>,
     {
-        transform(self, trans)
+        catch(self, trans)
     }
 
-    fn transform1<Trans, E, H, HY, EUL, RemEUL>(
+    fn catch1<Trans, E, H, HY, EUL, RemEUL>(
         self,
         trans: Trans,
-    ) -> Transform1<Self, Trans, H, Y, E, HY, EUL, RemEUL>
+    ) -> Catch1<Self, Trans, H, Y, E, HY, EUL, RemEUL>
     where
         Trans: FnMut(Sum<E>) -> H,
-        H: Effectful<HY, Return = Sum<E::ResumeList>>,
+        H: Effectful<HY, Return = ControlFlow<Self::Return, Sum<E::ResumeList>>>,
 
         E: EffectList,
         HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
@@ -91,7 +82,7 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         Y: EffectList + ContainsList<E, EUL, RemEUL>,
         Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
     {
-        transform(self, trans)
+        catch(self, trans)
     }
 }
 
@@ -109,11 +100,8 @@ mod test {
 
     use super::{Begin, EffectfulExt};
     use crate::{
-        self as reffect,
-        effect::{EffectExt, ResumeTy},
-        effectful, effectful_block, handler,
-        util::Sum,
-        Effect, EffectList, Effectful, Effects, Resumes,
+        self as reffect, effectful, effectful_block, handler, util::Sum, Effect, EffectList,
+        Effectful,
     };
 
     struct Eff1(u32);
@@ -173,27 +161,19 @@ mod test {
             ref eff @ Eff1(_) => eff.0 as u64,
         });
 
-        let coro = coro.transform0(|eff: Effects![Eff2]| {
-            move |_: Resumes![Eff2]| {
-                let sum = yield eff.broaden::<EffectList![Eff2], _>();
-                sum.narrow::<(ResumeTy<Eff2>, ()), _>().unwrap()
-            }
+        let coro = coro.catch0(handler! {
+            #![effectful(Eff2)]
+            eff @ Eff2(_) => yield eff,
         });
 
-        let coro = coro.transform1(|eff: Effects![Eff2]| {
-            move |_: Resumes![Eff3]| {
-                let r = yield eff
-                    .map(|Eff2(c)| Eff3(c.to_string()))
-                    .broaden::<(Eff3, ()), _>();
-                r.narrow::<(ResumeTy<Eff3>, ()), _>()
-                    .unwrap()
-                    .map(|i: ResumeTy<Eff3>| Eff2::tag(char::try_from(i.untag()).unwrap_or('d')))
-            }
+        let coro = coro.catch1(handler! {
+            #![effectful(Eff3)]
+            Eff2(c) => char::try_from(yield Eff3(c.to_string())).unwrap_or('d')
         });
 
         let coro = coro.handle(handler! {
             Eff3(y) if y == "true" => 1,
-            Eff3(_) => break 2,
+            Eff3(_) => break 100,
         });
 
         assert_eq!(coro.run(), 2);

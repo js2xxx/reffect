@@ -16,12 +16,14 @@ use crate::{
     util::{
         narrow_effect_prefixed,
         sum_type::{
-            range::{ContainsList, SplitList},
+            range::{ContainsList, Count, SplitList},
+            repr::SumList,
             NarrowRem,
         },
-        tag::U1,
-        Sum,
+        tag::{UTerm, U1},
+        ConcatList, Sum,
     },
+    Effectful,
 };
 
 pub fn catch<Coro, Trans, H, MTypes, MULists>(
@@ -121,4 +123,57 @@ where
             }
         }
     }
+}
+
+pub type Catch0<Coro, Trans, H, Y, E, HY, EUL, RemEUL, HUL> =
+    Catch<Coro, Trans, H, (Y, E, HY, Y), (EUL, RemEUL, HUL, RemEUL)>;
+
+pub fn catch0<Coro, Trans, E, Y, H, HY, EUL, RemEUL, HUL>(
+    coro: Coro,
+    trans: Trans,
+) -> Catch0<Coro, Trans, H, Y, E, HY, EUL, RemEUL, HUL>
+where
+    Coro: Effectful<Y>,
+    Trans: FnMut(Sum<E>) -> H,
+    H: Effectful<HY, Return = ControlFlow<Coro::Return, Sum<E::ResumeList>>>,
+
+    E: EffectList,
+    HY: EffectList,
+
+    Y: EffectList + ContainsList<E, EUL, RemEUL> + SplitList<HY, HUL>,
+    Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL> + SplitList<HY::ResumeList, HUL>,
+{
+    catch(coro, trans)
+}
+
+pub type Catch1<Coro, Trans, H, Y, E, HY, EUL, RemEUL> = Catch<
+    Coro,
+    Trans,
+    H,
+    (Y, E, HY, <HY as ConcatList<NarrowRem<Y, E, EUL>>>::Output),
+    (
+        EUL,
+        RemEUL,
+        <HY as SumList>::Tags<UTerm>,
+        <NarrowRem<Y, E, EUL> as SumList>::Tags<<HY as Count>::Count>,
+    ),
+>;
+
+pub fn catch1<Coro, Trans, E, H, Y, HY, EUL, RemEUL>(
+    coro: Coro,
+    trans: Trans,
+) -> Catch1<Coro, Trans, H, Y, E, HY, EUL, RemEUL>
+where
+    Coro: Effectful<Y>,
+    Trans: FnMut(Sum<E>) -> H,
+    H: Effectful<HY, Return = ControlFlow<Coro::Return, Sum<E::ResumeList>>>,
+
+    E: EffectList,
+    HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
+    HY::ResumeList: ConcatList<NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
+
+    Y: EffectList + ContainsList<E, EUL, RemEUL>,
+    Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
+{
+    catch(coro, trans)
 }

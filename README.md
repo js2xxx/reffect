@@ -52,7 +52,7 @@ assert_eq!(ret.run(), 2);
 
 - [x] `handler!(Eff1(x) | Eff2(x) => todo!())`
   - [x] Expand root `continue` to `ControlFlow::Continue`
-  - [ ] Effectful handlers (`transform`)
+  - [x] Effectful handlers (`transform`)
 - [ ] `#[group]` on trait definition
 - [ ] `#[group_handler]` on trait implementation
   - [ ] Effectful group handlers

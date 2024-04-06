@@ -178,7 +178,6 @@ impl VisitMut for DesugarHandlerExpr<'_> {
             }
 
             Expr::Async(_)
-            | Expr::Block(_)
             | Expr::Closure(_)
             | Expr::Const(_)
             | Expr::ForLoop(_)
@@ -186,18 +185,25 @@ impl VisitMut for DesugarHandlerExpr<'_> {
             | Expr::TryBlock(_)
             | Expr::While(_) => {}
 
+            Expr::Block(syn::ExprBlock { label, .. }) if label.is_some() => {}
+
             _ => visit_mut::visit_expr_mut(self, i),
         }
     }
 }
 
 pub struct Handlers {
+    args: Option<crate::Args>,
+    attrs: Vec<syn::Attribute>,
     root_label: Option<Lifetime>,
     handlers: Vec<Handler>,
 }
 
 impl Parse for Handlers {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut attrs = syn::Attribute::parse_inner(input)?;
+        let args = crate::Args::parse_attrs(&mut attrs).transpose()?;
+
         let root_label: Option<Lifetime> = input.parse()?;
         if root_label.is_some() {
             let _: Token![:] = input.parse()?;
@@ -208,21 +214,43 @@ impl Parse for Handlers {
             handlers.push(input.parse()?);
         }
 
-        Ok(Handlers { root_label, handlers })
+        Ok(Handlers {
+            args,
+            attrs,
+            root_label,
+            handlers,
+        })
     }
 }
 
 pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
-    let Handlers { ref root_label, mut handlers } = handlers;
+    let Handlers {
+        ref args,
+        attrs,
+        ref root_label,
+        mut handlers,
+    } = handlers;
     let base_ident = Ident::new("__effect_list", Span::call_site());
 
-    let effect_list = crate::expr::expand_effect(handlers.iter().flat_map(|h| {
+    let heffect_list = crate::expr::expand_effect(handlers.iter().flat_map(|h| {
         if !h.hargs.is_non_exhaustive {
             &*h.hargs.heffects
         } else {
             &[]
         }
     }));
+
+    let effect_list;
+    let mut desugar = match args {
+        Some(args) => {
+            effect_list = crate::expr::expand_effect(&args.effects);
+            Some(crate::DesugarExpr {
+                is_static: args.is_static.is_some(),
+                effect_list: &effect_list,
+            })
+        }
+        None => None,
+    };
 
     let branches = handlers.iter_mut().flat_map(|handler| {
         let Handler { hargs, guard, expr } = handler;
@@ -235,13 +263,19 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
 
         DesugarHandlerExpr { root_label }.visit_expr_mut(expr);
 
+        if let Some(ref mut desugar) = desugar {
+            desugar.visit_expr_mut(expr);
+        }
+
         let iter = (heffects.iter().zip(heffect_pats)).zip(iter::repeat((&*guard, &*expr)));
         iter.map(|((effect, pat), (guard, expr))| {
             let success = quote! {{
                 #[warn(unreachable_code, clippy::diverging_sub_expression)]
                 let ret = #expr;
                 let tagged = <#effect as reffect::EffectExt>::tag(ret);
-                let sum = reffect::util::Sum::new(tagged);
+                let sum = reffect::util::Sum::<
+                    <#heffect_list as reffect::effect::EffectList>::ResumeList,
+                >::new(tagged);
                 return core::ops::ControlFlow::Continue(sum);
             }};
             match guard {
@@ -274,10 +308,21 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
         })
     });
 
-    quote! {
-        |#base_ident: reffect::util::Sum<#effect_list>| {
-            #(#branches)*
-            #base_ident.unreachable()
+    let body = quote! {{
+        #(#attrs)*
+        #(#branches)*
+        #base_ident.unreachable()
+    }};
+
+    let body = match args {
+        Some(args) => {
+            let crate::Args { is_static, is_move, effects } = args;
+            let resume_types = crate::expr::expand_resume(effects);
+
+            quote!(#is_static #is_move |_: #resume_types| #body)
         }
-    }
+        None => body,
+    };
+
+    quote!(|#base_ident: reffect::util::Sum<#heffect_list>| #body)
 }
