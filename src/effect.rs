@@ -32,20 +32,6 @@ impl<E: Effect> EffectGroup for E {
     type Effects = (E, ());
 }
 
-#[macro_export]
-macro_rules! Effects {
-    [$($t:ty),* $(,)?] => {
-        $crate::Sum![$($t,)*]
-    };
-}
-
-#[macro_export]
-macro_rules! Resumes {
-    ($($t:ty),* $(,)?) => {
-        $crate::Sum![$crate::adapter::Begin, $($crate::effect::ResumeTy<$t>,)*]
-    };
-}
-
 pub trait EffectList: SumList {
     type ResumeList: SumList;
 }

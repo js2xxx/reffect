@@ -5,9 +5,7 @@
 ```rust
 #![feature(coroutines)]
 
-use std::convert::Infallible;
-use std::ops::ControlFlow::*;
-use reffect::{*, adapter::EffectfulExt, util::Sum};
+use reffect::*;
 
 struct Log(String);
 impl Effect for Log {

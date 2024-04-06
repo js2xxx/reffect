@@ -9,9 +9,10 @@ use core::{
 use pin_project::pin_project;
 
 use crate::{
+    adapter::Begin,
     effect::{EffectExt, IntoCoroutine},
     util::Sum,
-    Effect, Effectful, Effects, Resumes,
+    Effect, Effectful,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -47,15 +48,18 @@ impl<F: Future> FutCoro<F> {
     }
 }
 
-impl<F, T> Coroutine<Resumes![Async]> for FutCoro<F>
+type EffectAsync =Sum <(Async, ())>;
+type ResumeAsync = crate::Sum![Begin, crate::effect::ResumeTy<Async>];
+
+impl<F, T> Coroutine<ResumeAsync> for FutCoro<F>
 where
     F: Future<Output = T>,
 {
-    type Yield = Effects![Async];
+    type Yield = EffectAsync;
 
     type Return = T;
 
-    fn resume(self: Pin<&mut Self>, arg: Resumes![Async]) -> CoroutineState<Effects![Async], T> {
+    fn resume(self: Pin<&mut Self>, arg: ResumeAsync) -> CoroutineState<EffectAsync, T> {
         self.with(|fut| {
             let mut resume_ty = match arg.try_unwrap::<crate::effect::ResumeTy<Async>, _>() {
                 Ok(ty) => ty,
@@ -84,11 +88,11 @@ where
 
 pub enum FutureMarker {}
 
-impl<F, T> IntoCoroutine<FutureMarker, Resumes![Async]> for F
+impl<F, T> IntoCoroutine<FutureMarker, ResumeAsync> for F
 where
     F: IntoFuture<Output = T>,
 {
-    type Yield = Effects![Async];
+    type Yield = EffectAsync;
 
     type Return = T;
 

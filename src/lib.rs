@@ -18,4 +18,7 @@ extern crate std;
 
 pub use reffect_macros::{do_await, do_yield, effectful, effectful_block, handler, EffectList};
 
-pub use self::effect::{Effect, EffectExt, EffectGroup, Effectful};
+pub use self::{
+    adapter::EffectfulExt,
+    effect::{Effect, EffectExt, EffectGroup, Effectful},
+};
