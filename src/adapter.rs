@@ -111,7 +111,7 @@ mod test {
     use crate::{
         self as reffect,
         effect::{EffectExt, ResumeTy},
-        effectful, effectful_block,
+        effectful, effectful_block, handler,
         util::Sum,
         Effect, EffectList, Effectful, Effects, Resumes,
     };
@@ -168,7 +168,7 @@ mod test {
     fn basic() {
         let coro = b();
 
-        let coro = coro.handle(crate::handler! {
+        let coro = coro.handle(handler! {
             Eff1(100..) => 100,
             ref eff @ Eff1(_) => eff.0 as u64,
         });
@@ -191,9 +191,9 @@ mod test {
             }
         });
 
-        let coro = coro.handle(crate::handler! {
+        let coro = coro.handle(handler! {
             Eff3(y) if y == "true" => 1,
-            Eff3(_) => 2,
+            Eff3(_) => break 2,
         });
 
         assert_eq!(coro.run(), 2);

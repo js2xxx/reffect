@@ -236,35 +236,41 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
         DesugarHandlerExpr { root_label }.visit_expr_mut(expr);
 
         let iter = (heffects.iter().zip(heffect_pats)).zip(iter::repeat((&*guard, &*expr)));
-        iter.map(|((effect, pat), (guard, expr))| match guard {
-            Some(guard) => quote! {
-                let mut #base_ident = #base_ident;
-                #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
-                    Ok(#pat) if #guard => return core::ops::ControlFlow::Continue(
-                        reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
-                    ),
-                    Ok(res) => reffect::util::Sum::new(res),
-                    Err(rem) => rem.broaden(),
-                };
-            },
-            None if *is_non_exhaustive => quote! {
-                let mut #base_ident = #base_ident;
-                #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
-                    Ok(#pat) => return core::ops::ControlFlow::Continue(
-                        reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
-                    ),
-                    Ok(res) => reffect::util::Sum::new(res),
-                    Err(rem) => rem.broaden(),
-                };
-            },
-            None => quote! {
-                let #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
-                    Ok(#pat) => return core::ops::ControlFlow::Continue(
-                        reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
-                    ),
-                    Err(rem) => rem,
-                };
-            },
+        iter.map(|((effect, pat), (guard, expr))| {
+            let success = quote! {{
+                #[warn(unreachable_code, clippy::diverging_sub_expression)]
+                let ret = #expr;
+                let tagged = <#effect as reffect::EffectExt>::tag(ret);
+                let sum = reffect::util::Sum::new(tagged);
+                return core::ops::ControlFlow::Continue(sum);
+            }};
+            match guard {
+                Some(guard) => quote! {
+                    let mut #base_ident = #base_ident;
+                    #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
+                        #[allow(unreachable_code, clippy::diverging_sub_expression)]
+                        Ok(#pat) if #guard => #success,
+                        Ok(res) => reffect::util::Sum::new(res),
+                        Err(rem) => rem.broaden(),
+                    };
+                },
+                None if *is_non_exhaustive => quote! {
+                    let mut #base_ident = #base_ident;
+                    #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
+                        #[allow(unreachable_code, clippy::diverging_sub_expression)]
+                        Ok(#pat) => #success,
+                        Ok(res) => reffect::util::Sum::new(res),
+                        Err(rem) => rem.broaden(),
+                    };
+                },
+                None => quote! {
+                    let #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
+                        #[allow(unreachable_code, clippy::diverging_sub_expression)]
+                        Ok(#pat) => #success,
+                        Err(rem) => rem,
+                    };
+                },
+            }
         })
     });
 
