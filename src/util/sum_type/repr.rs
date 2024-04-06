@@ -1,9 +1,9 @@
-use core::{mem::ManuallyDrop, ptr};
+use core::{convert::Infallible, mem::ManuallyDrop, ptr};
 
 use super::range::Count;
 use crate::util::tag::{Tag, UInt, UTerm};
 
-pub struct Nil;
+pub struct Nil(pub(super) Infallible);
 
 #[repr(C)]
 pub union Cons<T, U> {

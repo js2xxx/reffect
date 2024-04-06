@@ -62,7 +62,7 @@ impl<T> Sum![T] {
 
 impl Sum![] {
     pub fn unreachable(self) -> ! {
-        unreachable!()
+        match self.data.0 {}
     }
 }
 

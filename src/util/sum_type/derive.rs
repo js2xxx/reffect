@@ -7,11 +7,11 @@ pub(super) trait SumClone: SumList {
 }
 
 impl SumClone for () {
-    unsafe fn clone(_: &Self::Repr, _: u8) -> ManuallyDrop<Self::Repr>
+    unsafe fn clone(nil: &Self::Repr, _: u8) -> ManuallyDrop<Nil>
     where
         Self: Clone,
     {
-        ManuallyDrop::new(Nil)
+        match nil.0 {}
     }
 }
 
