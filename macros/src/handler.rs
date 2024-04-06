@@ -18,7 +18,9 @@ struct HandlerArgs {
     root_ident: Option<syn::PatIdent>,
     heffects: Vec<Type>,
     heffect_pats: Vec<Pat>,
+    is_non_exhaustive: bool,
 
+    is_in_subpat: bool,
     err: Option<syn::Error>,
 }
 
@@ -27,58 +29,92 @@ impl Visit<'_> for HandlerArgs {
         match i {
             #![cfg_attr(test, deny(non_exhaustive_omitted_patterns))]
             Pat::Ident(pi) => {
-                let mut pat_ident = pi.clone();
-                pat_ident.subpat = None;
-                self.root_ident = Some(pat_ident);
-                visit::visit_pat(self, i)
+                if !self.is_in_subpat {
+                    let mut pat_ident = pi.clone();
+                    pat_ident.subpat = None;
+                    self.root_ident = Some(pat_ident);
+                }
+                visit::visit_pat(self, i);
             }
 
             Pat::Struct(syn::PatStruct { qself, path, .. })
             | Pat::TupleStruct(syn::PatTupleStruct { qself, path, .. })
             | Pat::Path(syn::PatPath { qself, path, .. }) => {
+                assert!(!self.is_in_subpat);
+
                 let ty = Type::Path(syn::TypePath {
                     qself: qself.clone(),
                     path: path.clone(),
                 });
+
+                if self.heffects.iter().any(|d| d == &ty) {
+                    self.err = Some(syn::Error::new_spanned(
+                        ty,
+                        "splitting the same effect type into multiple patterns is not supported",
+                    ));
+                    return;
+                }
+
+                let root_ident = self.root_ident.take();
+
+                self.is_in_subpat = true;
+                visit::visit_pat(self, i);
+                self.is_in_subpat = false;
+
                 self.heffects.push(ty);
-                self.heffect_pats
-                    .push(if let Some(mut pi) = self.root_ident.take() {
+                self.heffect_pats.push(match root_ident {
+                    Some(mut pi) => {
                         pi.subpat = Some((<Token![@]>::default(), Box::new(i.clone())));
                         Pat::Ident(pi)
-                    } else {
-                        i.clone()
-                    });
+                    }
+                    None => i.clone(),
+                });
             }
 
             Pat::Paren(_) => visit::visit_pat(self, i),
             Pat::Or(_) => {
-                if let Some(pi) = self.root_ident.take() {
-                    self.err = Some(syn::Error::new_spanned(
-                        pi,
-                        "root ident bindings on different effects are not supported",
-                    ));
-                    return;
+                if !self.is_in_subpat {
+                    if let Some(pi) = self.root_ident.take() {
+                        self.err = Some(syn::Error::new_spanned(
+                            pi,
+                            "root ident bindings on different effects are not supported",
+                        ));
+                        return;
+                    }
                 }
                 visit::visit_pat(self, i)
             }
 
             Pat::Const(_)
             | Pat::Lit(_)
-            | Pat::Macro(_)
             | Pat::Range(_)
+            | Pat::Macro(_)
             | Pat::Reference(_)
             | Pat::Rest(_)
             | Pat::Slice(_)
             | Pat::Type(_)
             | Pat::Verbatim(_)
-            | Pat::Tuple(_) => {
+            | Pat::Tuple(_)
+                if !self.is_in_subpat =>
+            {
                 self.err = Some(syn::Error::new_spanned(
                     i,
                     format_args!("pattern {} are not supported", i.to_token_stream()),
                 ))
             }
 
-            Pat::Wild(_) => self.err = Some(syn::Error::new_spanned(i, "cannot infer effect type")),
+            Pat::Const(_) | Pat::Lit(_) => {
+                self.is_non_exhaustive = true;
+                visit::visit_pat(self, i)
+            }
+            Pat::Range(syn::ExprRange { start, end, .. }) if start.is_some() || end.is_some() => {
+                self.is_non_exhaustive = true;
+                visit::visit_pat(self, i)
+            }
+
+            Pat::Wild(_) if !self.is_in_subpat => {
+                self.err = Some(syn::Error::new_spanned(i, "cannot infer effect type"))
+            }
 
             _ => visit::visit_pat(self, i),
         }
@@ -114,6 +150,10 @@ impl Parse for Handler {
                 Span::call_site(),
                 "cannot infer effect types; please specify at least one effect in the pattern",
             ));
+        }
+
+        if guard.is_some() {
+            hargs.is_non_exhaustive = true;
         }
 
         Ok(Handler {
@@ -177,7 +217,7 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
     let base_ident = Ident::new("__effect_list", Span::call_site());
 
     let effect_list = crate::expr::expand_effect(handlers.iter().flat_map(|h| {
-        if h.guard.is_none() {
+        if !h.hargs.is_non_exhaustive {
             &*h.hargs.heffects
         } else {
             &[]
@@ -186,7 +226,12 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
 
     let branches = handlers.iter_mut().flat_map(|handler| {
         let Handler { hargs, guard, expr } = handler;
-        let HandlerArgs { heffects, heffect_pats, .. } = hargs;
+        let HandlerArgs {
+            heffects,
+            heffect_pats,
+            is_non_exhaustive,
+            ..
+        } = hargs;
 
         DesugarHandlerExpr { root_label }.visit_expr_mut(expr);
 
@@ -198,7 +243,17 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
                     Ok(#pat) if #guard => return core::ops::ControlFlow::Continue(
                         reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
                     ),
-                    Ok(#pat) => reffect::util::Sum::new(#pat),
+                    Ok(res) => reffect::util::Sum::new(res),
+                    Err(rem) => rem.broaden(),
+                };
+            },
+            None if *is_non_exhaustive => quote! {
+                let mut #base_ident = #base_ident;
+                #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
+                    Ok(#pat) => return core::ops::ControlFlow::Continue(
+                        reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
+                    ),
+                    Ok(res) => reffect::util::Sum::new(res),
                     Err(rem) => rem.broaden(),
                 };
             },

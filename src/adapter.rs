@@ -168,7 +168,10 @@ mod test {
     fn basic() {
         let coro = b();
 
-        let coro = coro.handle(crate::handler!(ref eff @ Eff1(_) => eff.0 as u64));
+        let coro = coro.handle(crate::handler! {
+            Eff1(100..) => 100,
+            ref eff @ Eff1(_) => eff.0 as u64,
+        });
 
         let coro = coro.transform0(|eff: Effects![Eff2]| {
             move |_: Resumes![Eff2]| {
@@ -189,7 +192,8 @@ mod test {
         });
 
         let coro = coro.handle(crate::handler! {
-            Eff3(y) => if y == "true" { 1 } else { 2 },
+            Eff3(y) if y == "true" => 1,
+            Eff3(_) => 2,
         });
 
         assert_eq!(coro.run(), 2);
