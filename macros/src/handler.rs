@@ -5,7 +5,7 @@ use quote::{quote, ToTokens};
 use syn::{
     parse::Parse,
     parse_quote,
-    punctuated::Punctuated,
+    spanned::Spanned,
     visit::{self, Visit},
     visit_mut::{self, VisitMut},
     Expr, Ident, Lifetime, Pat, Token, Type,
@@ -85,29 +85,23 @@ impl Visit<'_> for HandlerArgs {
     }
 }
 
-pub struct Handler {
-    // args: Option<Args>,
-    root_label: Option<Lifetime>,
+struct Handler {
     hargs: HandlerArgs,
-    expr: Expr,
+    guard: Option<Box<Expr>>,
+    expr: Box<Expr>,
 }
 
 impl Parse for Handler {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // let args = syn::Attribute::parse_outer(input).map(|attr| {
-        //     if matches!(attr.meta, syn::Meta::Path(_)) {
-        //         Ok(Args::default())
-        //     } else {
-        //         attr.parse_args()
-        //     }
-        // })??;
+        let syn::Arm { attrs, pat, guard, body, .. } = input.parse()?;
 
-        let root_label: Option<Lifetime> = input.parse()?;
-        if root_label.is_some() {
-            let _: Token![:] = input.parse()?;
+        if let (Some(first), Some(last)) = (attrs.first(), attrs.last()) {
+            return Err(syn::Error::new(
+                first.span().join(last.span()).unwrap(),
+                "custom attributes are not supported on handler arms",
+            ));
         }
 
-        let pat = Pat::parse_multi(input)?;
         let mut hargs = HandlerArgs::default();
         hargs.visit_pat(&pat);
 
@@ -122,22 +116,23 @@ impl Parse for Handler {
             ));
         }
 
-        let _: Token![=>] = input.parse()?;
-        let expr: Expr = input.parse()?;
-
-        Ok(Handler { root_label, hargs, expr })
+        Ok(Handler {
+            hargs,
+            guard: guard.map(|g| g.1),
+            expr: body,
+        })
     }
 }
 
-struct DesugarHandlerExpr {
-    root_label: Option<Lifetime>,
+struct DesugarHandlerExpr<'a> {
+    root_label: &'a Option<Lifetime>,
 }
 
-impl VisitMut for DesugarHandlerExpr {
+impl VisitMut for DesugarHandlerExpr<'_> {
     fn visit_expr_mut(&mut self, i: &mut syn::Expr) {
         match i {
             Expr::Break(syn::ExprBreak { label, expr, .. })
-                if *label == self.root_label || label.is_none() =>
+                if label == self.root_label || label.is_none() =>
             {
                 *i = parse_quote!(return core::ops::ControlFlow::Break(#expr));
             }
@@ -156,33 +151,71 @@ impl VisitMut for DesugarHandlerExpr {
     }
 }
 
-pub fn expand_handler(mut handlers: Punctuated<Handler, Token![,]>) -> proc_macro2::TokenStream {
+pub struct Handlers {
+    root_label: Option<Lifetime>,
+    handlers: Vec<Handler>,
+}
+
+impl Parse for Handlers {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let root_label: Option<Lifetime> = input.parse()?;
+        if root_label.is_some() {
+            let _: Token![:] = input.parse()?;
+        }
+
+        let mut handlers = Vec::new();
+        while !input.is_empty() {
+            handlers.push(input.parse()?);
+        }
+
+        Ok(Handlers { root_label, handlers })
+    }
+}
+
+pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
+    let Handlers { ref root_label, mut handlers } = handlers;
     let base_ident = Ident::new("__effect_list", Span::call_site());
 
-    let effect_list = crate::expr::expand_effect(handlers.iter().flat_map(|h| &h.hargs.heffects));
+    let effect_list = crate::expr::expand_effect(handlers.iter().flat_map(|h| {
+        if h.guard.is_none() {
+            &*h.hargs.heffects
+        } else {
+            &[]
+        }
+    }));
 
     let branches = handlers.iter_mut().flat_map(|handler| {
-        let Handler { root_label, hargs, expr } = handler;
+        let Handler { hargs, guard, expr } = handler;
         let HandlerArgs { heffects, heffect_pats, .. } = hargs;
 
-        DesugarHandlerExpr { root_label: root_label.take() }.visit_expr_mut(expr);
+        DesugarHandlerExpr { root_label }.visit_expr_mut(expr);
 
-        let iter = heffects.iter().zip(heffect_pats).zip(iter::repeat(&*expr));
-        iter.map(|((effect, pat), expr)| {
-            quote! {
+        let iter = (heffects.iter().zip(heffect_pats)).zip(iter::repeat((&*guard, &*expr)));
+        iter.map(|((effect, pat), (guard, expr))| match guard {
+            Some(guard) => quote! {
+                let mut #base_ident = #base_ident;
+                #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
+                    Ok(#pat) if #guard => return core::ops::ControlFlow::Continue(
+                        reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
+                    ),
+                    Ok(#pat) => reffect::util::Sum::new(#pat),
+                    Err(rem) => rem.broaden(),
+                };
+            },
+            None => quote! {
                 let #base_ident = match #base_ident.try_unwrap::<#effect, _>() {
                     Ok(#pat) => return core::ops::ControlFlow::Continue(
                         reffect::util::Sum::new(<#effect as reffect::EffectExt>::tag(#expr))
                     ),
                     Err(rem) => rem,
-                }
-            }
+                };
+            },
         })
     });
 
     quote! {
         |#base_ident: reffect::util::Sum<#effect_list>| {
-            #(#branches;)*
+            #(#branches)*
             #base_ident.unreachable()
         }
     }

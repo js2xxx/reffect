@@ -38,13 +38,13 @@ fn test_func() -> u32 {
     value
 }
 
-let ret = test_func()
-    .handle(handler! {
-        Log(s) => println!("{s}"),
-        Increment(i) => i + 1,
-    })
-    .run();
-assert_eq!(ret, 2);
+let ret = test_func().handle(handler! {
+    Log(s) => println!("{s}"),
+    Increment(i) if i < 10 => i + 1,
+    Increment(i) => break i,
+});
+
+assert_eq!(ret.run(), 2);
 
 ```
 

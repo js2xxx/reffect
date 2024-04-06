@@ -189,7 +189,7 @@ mod test {
         });
 
         let coro = coro.handle(crate::handler! {
-            Eff3(y) => if y == "true" { 1 } else { 2 }
+            Eff3(y) => if y == "true" { 1 } else { 2 },
         });
 
         assert_eq!(coro.run(), 2);

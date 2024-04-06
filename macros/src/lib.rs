@@ -103,10 +103,8 @@ pub fn effectful(
 
 #[proc_macro]
 pub fn handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    match syn::parse::Parser::parse(parse_terminated::<handler::Handler, Token![,]>, input) {
-        Ok(handlers) => handler::expand_handler(handlers).into(),
-        Err(e) => e.to_compile_error().into(),
-    }
+    let handlers = parse_macro_input!(input as handler::Handlers);
+    handler::expand_handler(handlers).into()
 }
 
 #[proc_macro]
