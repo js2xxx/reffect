@@ -15,9 +15,9 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub struct Await;
+pub struct Async;
 
-impl Effect for Await {
+impl Effect for Async {
     type Resume = ResumeTy;
 }
 
@@ -47,25 +47,25 @@ impl<F: Future> FutCoro<F> {
     }
 }
 
-impl<F, T> Coroutine<Resumes![Await]> for FutCoro<F>
+impl<F, T> Coroutine<Resumes![Async]> for FutCoro<F>
 where
     F: Future<Output = T>,
 {
-    type Yield = Effects![Await];
+    type Yield = Effects![Async];
 
     type Return = T;
 
-    fn resume(self: Pin<&mut Self>, arg: Resumes![Await]) -> CoroutineState<Effects![Await], T> {
+    fn resume(self: Pin<&mut Self>, arg: Resumes![Async]) -> CoroutineState<Effects![Async], T> {
         self.with(|fut| {
-            let mut resume_ty = match arg.try_unwrap::<crate::effect::ResumeTy<Await>, _>() {
+            let mut resume_ty = match arg.try_unwrap::<crate::effect::ResumeTy<Async>, _>() {
                 Ok(ty) => ty,
-                Err(_) => return CoroutineState::Yielded(Sum::new(Await)),
+                Err(_) => return CoroutineState::Yielded(Sum::new(Async)),
             };
             // SAFETY: The reference is guaranteed to be valid for the span of this polling
             // lifetime.
             match fut.poll(unsafe { resume_ty.0.as_mut() }) {
                 Poll::Ready(ret) => CoroutineState::Complete(ret),
-                Poll::Pending => CoroutineState::Yielded(Sum::new(Await)),
+                Poll::Pending => CoroutineState::Yielded(Sum::new(Async)),
             }
         })
     }
@@ -84,11 +84,11 @@ where
 
 pub enum FutureMarker {}
 
-impl<F, T> IntoCoroutine<FutureMarker, Resumes![Await]> for F
+impl<F, T> IntoCoroutine<FutureMarker, Resumes![Async]> for F
 where
     F: IntoFuture<Output = T>,
 {
-    type Yield = Effects![Await];
+    type Yield = Effects![Async];
 
     type Return = T;
 
@@ -101,14 +101,14 @@ where
 
 pub async fn run<Coro, T>(coro: Coro) -> T
 where
-    Coro: Effectful<(Await, ()), Return = T>,
+    Coro: Effectful<(Async, ()), Return = T>,
 {
     fn poll<Coro, T>(mut coro: Pin<&mut Coro>, cx: &mut Context<'_>) -> Poll<T>
     where
-        Coro: Effectful<(Await, ()), Return = T>,
+        Coro: Effectful<(Async, ()), Return = T>,
     {
         // SAFETY: The reference is guaranteed to be valid for the span of this polling.
-        let state = Sum::new(Await::tag(unsafe { ResumeTy::new(cx) }));
+        let state = Sum::new(Async::tag(unsafe { ResumeTy::new(cx) }));
         match coro.as_mut().resume(state) {
             CoroutineState::Yielded(_) => Poll::Pending,
             CoroutineState::Complete(ret) => Poll::Ready(ret),

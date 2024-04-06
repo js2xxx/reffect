@@ -104,7 +104,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use core::ops::{ControlFlow::*, Coroutine};
+    use core::ops::Coroutine;
     use std::string::{String, ToString};
 
     use super::{Begin, EffectfulExt};
@@ -168,10 +168,7 @@ mod test {
     fn basic() {
         let coro = b();
 
-        let coro = coro.handle(|x: Effects![Eff1]| {
-            let r = x.into_inner().0 as u64;
-            Continue(Eff1::tag(r).into())
-        });
+        let coro = coro.handle(crate::handler!(ref eff @ Eff1(_) => eff.0 as u64));
 
         let coro = coro.transform0(|eff: Effects![Eff2]| {
             move |_: Resumes![Eff2]| {
@@ -191,9 +188,8 @@ mod test {
             }
         });
 
-        let coro = coro.handle(|y: Effects![Eff3]| {
-            let r = if y.into_inner().0 == "true" { 1 } else { 2 };
-            Continue(Sum::from(Eff3::tag(r)))
+        let coro = coro.handle(crate::handler! {
+            Eff3(y) => if y == "true" { 1 } else { 2 }
         });
 
         assert_eq!(coro.run(), 2);

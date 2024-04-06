@@ -16,6 +16,6 @@ pub mod util;
 #[cfg(test)]
 extern crate std;
 
-pub use reffect_macros::{do_await, do_yield, effectful, effectful_block, EffectList};
+pub use reffect_macros::{do_await, do_yield, effectful, effectful_block, handler, EffectList};
 
 pub use self::effect::{Effect, EffectExt, EffectGroup, Effectful};

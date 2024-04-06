@@ -39,14 +39,8 @@ fn test_func() -> u32 {
 }
 
 let ret = test_func()
-    .handle(|log: Sum![Log]| {
-        println!("{}", log.0);
-        Continue(Sum::new(Log::tag(())))
-    })
-    .handle(|mut increment: Sum![Increment]| {
-        increment.0 += 1;
-        Continue(increment.map(|i| Increment::tag(i.0)))
-    })
+    .handle(handler!(Log(s) => println!("{s}")))
+    .handle(handler!(Increment(i) => i + 1))
     .run();
 assert_eq!(ret, 2);
 
@@ -54,8 +48,8 @@ assert_eq!(ret, 2);
 
 ## TODO
 
-- [ ] `handler!(Eff1(x) | Eff2(x) => todo!())`
-  - [ ] Expand root `continue` to `ControlFlow::Continue`
+- [x] `handler!(Eff1(x) | Eff2(x) => todo!())`
+  - [x] Expand root `continue` to `ControlFlow::Continue`
   - [ ] Effectful handlers (`transform`)
 - [ ] `#[group]` on trait definition
 - [ ] `#[group_handler]` on trait implementation

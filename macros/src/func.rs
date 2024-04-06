@@ -14,7 +14,7 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
     }
 
     if item.sig.asyncness.take().is_some() {
-        effects.insert(1, parse_quote!(reffect::future::Await));
+        effects.insert(1, parse_quote!(reffect::future::Async));
     }
 
     let resume_types = crate::expr::expand_resume(&effects);
@@ -51,7 +51,7 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
     };
 
     let mut block = *item.block;
-    
+
     DesugarExpr {
         is_static: is_static.is_some(),
         effect_list: &effect_list,

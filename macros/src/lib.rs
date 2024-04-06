@@ -1,9 +1,11 @@
 #![allow(internal_features)]
 #![feature(allow_internal_unstable)]
+#![feature(non_exhaustive_omitted_patterns_lint)]
 
 mod block;
 mod expr;
 mod func;
+mod handler;
 
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -94,6 +96,12 @@ pub fn effectful(
     let args = parse_macro_input!(args as Args);
     let input = parse_macro_input!(input as syn::ItemFn);
     func::expand_func(args, input).into()
+}
+
+#[proc_macro]
+pub fn handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let handler = parse_macro_input!(input as handler::Handler);
+    handler::expand_handler(handler).into()
 }
 
 #[proc_macro]
