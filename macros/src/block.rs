@@ -13,7 +13,7 @@ pub(crate) struct EffectfulBlock {
 impl Parse for EffectfulBlock {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut attrs = Attribute::parse_inner(input)?;
-        let args = Args::parse_attrs(&mut attrs).ok_or_else(|| {
+        let args = crate::parse_attrs(&mut attrs, "effectful").ok_or_else(|| {
             syn::Error::new(Span::call_site(), "expect a `#![effectful]` attribute")
         })??;
 

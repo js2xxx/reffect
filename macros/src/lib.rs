@@ -18,27 +18,6 @@ struct Args {
     effects: Punctuated<syn::Type, Token![,]>,
 }
 
-impl Args {
-    fn parse_attrs(attrs: &mut Vec<syn::Attribute>) -> Option<syn::Result<Self>> {
-        let args = attrs.iter().enumerate().find_map(|(index, attr)| {
-            attr.path().is_ident("effectful").then(|| {
-                if matches!(attr.meta, syn::Meta::Path(_)) {
-                    Ok((index, Args::default()))
-                } else {
-                    attr.parse_args().map(|a| (index, a))
-                }
-            })
-        });
-
-        args.map(|a| {
-            a.map(|(index, args)| {
-                attrs.remove(index);
-                args
-            })
-        })
-    }
-}
-
 impl Parse for Args {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let is_static: Option<Token![static]> = input.parse()?;
@@ -57,6 +36,25 @@ impl Parse for Args {
         let effects = input.parse_terminated(syn::Type::parse, Token![,])?;
         Ok(Args { is_static, is_move, effects })
     }
+}
+
+fn parse_attrs<T: Parse + Default>(attrs: &mut Vec<syn::Attribute>, ident: &str) -> Option<syn::Result<T>> {
+    let ret = attrs.iter().enumerate().find_map(|(index, attr)| {
+        attr.path().is_ident(ident).then(|| {
+            if matches!(attr.meta, syn::Meta::Path(_)) {
+                Ok((index, T::default()))
+            } else {
+                attr.parse_args().map(|a| (index, a))
+            }
+        })
+    });
+
+    ret.map(|a| {
+        a.map(|(index, args)| {
+            attrs.remove(index);
+            args
+        })
+    })
 }
 
 struct DesugarExpr<'a> {

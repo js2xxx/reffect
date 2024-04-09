@@ -1,6 +1,7 @@
 use core::{
     fmt::Debug,
-    ops::{Coroutine, Deref, DerefMut},
+    ops::{Coroutine, CoroutineState, Deref, DerefMut},
+    pin::Pin,
 };
 
 use crate::{
@@ -119,5 +120,38 @@ where
 
     fn into_coroutine(self) -> Self::IntoCoroutine {
         self
+    }
+}
+
+pub struct FuncCoro<F>(Option<F>);
+
+impl<F> Unpin for FuncCoro<F> {}
+
+impl<F, T> Coroutine<Sum<(Begin, ())>> for FuncCoro<F>
+where
+    F: FnOnce() -> T,
+{
+    type Yield = Sum<()>;
+    type Return = T;
+
+    fn resume(mut self: Pin<&mut Self>, _: Sum<(Begin, ())>) -> CoroutineState<Sum<()>, T> {
+        match self.0.take() {
+            Some(f) => CoroutineState::Complete(f()),
+            None => panic!("function coroutine resumed after completion"),
+        }
+    }
+}
+
+pub enum FuncMarker {}
+impl<F, T> IntoCoroutine<FuncMarker, Sum<(Begin, ())>> for F
+where
+    F: FnOnce() -> T,
+{
+    type Yield = Sum<()>;
+    type Return = T;
+    type IntoCoroutine = FuncCoro<F>;
+
+    fn into_coroutine(self) -> Self::IntoCoroutine {
+        FuncCoro(Some(self))
     }
 }

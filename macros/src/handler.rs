@@ -14,7 +14,7 @@ use syn::{
 // use crate::Args;
 
 #[derive(Default)]
-struct HandlerArgs {
+struct HandlerPat {
     root_ident: Option<syn::PatIdent>,
     heffects: Vec<Type>,
     heffect_pats: Vec<Pat>,
@@ -24,7 +24,7 @@ struct HandlerArgs {
     err: Option<syn::Error>,
 }
 
-impl Visit<'_> for HandlerArgs {
+impl Visit<'_> for HandlerPat {
     fn visit_pat(&mut self, i: &'_ syn::Pat) {
         match i {
             #![cfg_attr(test, deny(non_exhaustive_omitted_patterns))]
@@ -122,7 +122,7 @@ impl Visit<'_> for HandlerArgs {
 }
 
 struct Handler {
-    hargs: HandlerArgs,
+    hargs: HandlerPat,
     guard: Option<Box<Expr>>,
     expr: Box<Expr>,
 }
@@ -138,7 +138,7 @@ impl Parse for Handler {
             ));
         }
 
-        let mut hargs = HandlerArgs::default();
+        let mut hargs = HandlerPat::default();
         hargs.visit_pat(&pat);
 
         if let Some(err) = hargs.err.take() {
@@ -192,7 +192,21 @@ impl VisitMut for DesugarHandlerExpr<'_> {
     }
 }
 
+#[derive(Default)]
+struct HandlerArgs {
+    is_move: Option<Token![move]>,
+}
+
+impl Parse for HandlerArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        Ok(HandlerArgs {
+            is_move: input.parse()?,
+        })
+    }
+}
+
 pub struct Handlers {
+    hargs: HandlerArgs,
     args: Option<crate::Args>,
     attrs: Vec<syn::Attribute>,
     root_label: Option<Lifetime>,
@@ -202,7 +216,8 @@ pub struct Handlers {
 impl Parse for Handlers {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut attrs = syn::Attribute::parse_inner(input)?;
-        let args = crate::Args::parse_attrs(&mut attrs).transpose()?;
+        let args = crate::parse_attrs(&mut attrs, "effectful").transpose()?;
+        let hargs = crate::parse_attrs(&mut attrs, "handler").transpose()?;
 
         let root_label: Option<Lifetime> = input.parse()?;
         if root_label.is_some() {
@@ -215,6 +230,7 @@ impl Parse for Handlers {
         }
 
         Ok(Handlers {
+            hargs: hargs.unwrap_or_default(),
             args,
             attrs,
             root_label,
@@ -225,11 +241,13 @@ impl Parse for Handlers {
 
 pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
     let Handlers {
+        hargs,
         ref args,
         attrs,
         ref root_label,
         mut handlers,
     } = handlers;
+    let HandlerArgs { is_move } = hargs;
     let base_ident = Ident::new("__effect_list", Span::call_site());
 
     let heffect_list = crate::expr::expand_effect(handlers.iter().flat_map(|h| {
@@ -254,7 +272,7 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
 
     let branches = handlers.iter_mut().flat_map(|handler| {
         let Handler { hargs, guard, expr } = handler;
-        let HandlerArgs {
+        let HandlerPat {
             heffects,
             heffect_pats,
             is_non_exhaustive,
@@ -324,5 +342,5 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
         None => body,
     };
 
-    quote!(|#base_ident: reffect::util::Sum<#heffect_list>| #body)
+    quote!(#is_move |#base_ident: reffect::util::Sum<#heffect_list>| #body)
 }
