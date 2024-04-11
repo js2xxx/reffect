@@ -38,7 +38,10 @@ impl Parse for Args {
     }
 }
 
-fn parse_attrs<T: Parse + Default>(attrs: &mut Vec<syn::Attribute>, ident: &str) -> Option<syn::Result<T>> {
+fn parse_attrs<T: Parse + Default>(
+    attrs: &mut Vec<syn::Attribute>,
+    ident: &str,
+) -> Option<syn::Result<T>> {
     let ret = attrs.iter().enumerate().find_map(|(index, attr)| {
         attr.path().is_ident(ident).then(|| {
             if matches!(attr.meta, syn::Meta::Path(_)) {

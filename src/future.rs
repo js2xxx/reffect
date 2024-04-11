@@ -48,7 +48,7 @@ impl<F: Future> FutCoro<F> {
     }
 }
 
-type EffectAsync =Sum <(Async, ())>;
+type EffectAsync = Sum<(Async, ())>;
 type ResumeAsync = crate::Sum![Begin, crate::effect::ResumeTy<Async>];
 
 impl<F, T> Coroutine<ResumeAsync> for FutCoro<F>

@@ -1,5 +1,6 @@
 use std::iter;
 
+use convert_case::{Case, Casing};
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{
@@ -10,8 +11,6 @@ use syn::{
     visit_mut::{self, VisitMut},
     Expr, Ident, Lifetime, Pat, Token, Type,
 };
-
-// use crate::Args;
 
 #[derive(Default)]
 struct HandlerPat {
@@ -24,12 +23,64 @@ struct HandlerPat {
     err: Option<syn::Error>,
 }
 
+impl HandlerPat {
+    fn check_ty(&mut self, ty: &Type) -> bool {
+        if self.heffects.iter().any(|d| d == ty) {
+            self.err = Some(syn::Error::new_spanned(
+                ty,
+                "splitting the same effect type into multiple patterns is not supported",
+            ));
+            return false;
+        }
+        true
+    }
+
+    fn check_ty_with_other(&self, other: &Self) -> Option<syn::Error> {
+        self.heffects.iter().find_map(|d| {
+            let any = other.heffects.iter().any(|e| d == e);
+            if any && !self.is_non_exhaustive && !other.is_non_exhaustive {
+                return Some(syn::Error::new_spanned(
+                    d,
+                    "multiple exhaustive patterns on the same effect type are not supported",
+                ));
+            }
+            None
+        })
+    }
+
+    fn push_ty(&mut self, ty: Type, root_ident: Option<syn::PatIdent>, i: &syn::Pat) {
+        self.heffects.push(ty);
+        self.heffect_pats.push(match root_ident {
+            Some(mut pi) => {
+                pi.subpat = Some((<Token![@]>::default(), Box::new(i.clone())));
+                Pat::Ident(pi)
+            }
+            None => i.clone(),
+        });
+    }
+}
+
 impl Visit<'_> for HandlerPat {
     fn visit_pat(&mut self, i: &'_ syn::Pat) {
         match i {
             #![cfg_attr(test, deny(non_exhaustive_omitted_patterns))]
             Pat::Ident(pi) => {
                 if !self.is_in_subpat {
+                    let s = pi.ident.to_string();
+                    if pi.subpat.is_none() && s.is_case(Case::Pascal) {
+                        let ty = Type::Path(syn::TypePath {
+                            qself: None,
+                            path: syn::Path::from(pi.ident.clone()),
+                        });
+
+                        if self.check_ty(&ty) {
+                            let root_ident = self.root_ident.take();
+                            self.push_ty(ty, root_ident, i);
+                        }
+
+                        return;
+                    }
+
                     let mut pat_ident = pi.clone();
                     pat_ident.subpat = None;
                     self.root_ident = Some(pat_ident);
@@ -47,28 +98,15 @@ impl Visit<'_> for HandlerPat {
                     path: path.clone(),
                 });
 
-                if self.heffects.iter().any(|d| d == &ty) {
-                    self.err = Some(syn::Error::new_spanned(
-                        ty,
-                        "splitting the same effect type into multiple patterns is not supported",
-                    ));
-                    return;
+                if self.check_ty(&ty) {
+                    let root_ident = self.root_ident.take();
+
+                    self.is_in_subpat = true;
+                    visit::visit_pat(self, i);
+                    self.is_in_subpat = false;
+
+                    self.push_ty(ty, root_ident, i);
                 }
-
-                let root_ident = self.root_ident.take();
-
-                self.is_in_subpat = true;
-                visit::visit_pat(self, i);
-                self.is_in_subpat = false;
-
-                self.heffects.push(ty);
-                self.heffect_pats.push(match root_ident {
-                    Some(mut pi) => {
-                        pi.subpat = Some((<Token![@]>::default(), Box::new(i.clone())));
-                        Pat::Ident(pi)
-                    }
-                    None => i.clone(),
-                });
             }
 
             Pat::Paren(_) => visit::visit_pat(self, i),
@@ -199,9 +237,7 @@ struct HandlerArgs {
 
 impl Parse for HandlerArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(HandlerArgs {
-            is_move: input.parse()?,
-        })
+        Ok(HandlerArgs { is_move: input.parse()? })
     }
 }
 
@@ -249,6 +285,13 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
     } = handlers;
     let HandlerArgs { is_move } = hargs;
     let base_ident = Ident::new("__effect_list", Span::call_site());
+
+    if let Some(err) = (handlers.iter().enumerate())
+        .flat_map(|(index, a)| handlers.iter().take(index).map(move |b| (a, b)))
+        .find_map(|(a, b)| a.hargs.check_ty_with_other(&b.hargs))
+    {
+        return err.to_compile_error();
+    }
 
     let heffect_list = crate::expr::expand_effect(handlers.iter().flat_map(|h| {
         if !h.hargs.is_non_exhaustive {

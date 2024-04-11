@@ -52,13 +52,9 @@ impl<Coro, Trans, Y, T, E, H, HY, OY, EUL, RemEUL, HOUL, OUL>
     Coroutine<Sum<(Begin, OY::ResumeList)>>
     for Catch<Coro, Trans, H, (Y, E, HY, OY), (EUL, RemEUL, HOUL, OUL)>
 where
-    Coro: Coroutine<Sum<(Begin, Y::ResumeList)>, Yield = Sum<Y>, Return = T>,
+    Coro: Effectful<Y, Return = T>,
     Trans: FnMut(Sum<E>) -> H,
-    H: Coroutine<
-        Sum<(Begin, HY::ResumeList)>,
-        Yield = Sum<HY>,
-        Return = ControlFlow<T, Sum<E::ResumeList>>,
-    >,
+    H: Effectful<HY, Return = ControlFlow<T, Sum<E::ResumeList>>>,
 
     E: EffectList,
     Y: EffectList,
