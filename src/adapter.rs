@@ -2,7 +2,7 @@ mod catch;
 mod handle;
 
 use core::{
-    ops::{ControlFlow, Coroutine, CoroutineState::*},
+    ops::{Coroutine, CoroutineState::*},
     pin::pin,
 };
 
@@ -11,7 +11,7 @@ pub use self::{
     handle::{handle, Handle},
 };
 use crate::{
-    effect::{EffectList, Effectful},
+    effect::{EffectList, Effectful, Handler},
     util::{
         sum_type::{
             range::{ContainsList, SplitList},
@@ -43,20 +43,26 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         handle(self, handler)
     }
 
-    fn catch<Trans, H, MTypes, MULists>(
+    fn catch<'h, Trans, E, HY, OY, MULists>(
         self,
         trans: Trans,
-    ) -> Catch<Self, Trans, H, MTypes, MULists> {
+    ) -> Catch<'h, Self, Trans, Y, E, HY, OY, MULists>
+    where
+        Trans: Handler<Self::Return, E, HY> + 'h,
+
+        E: EffectList,
+        Y: EffectList,
+        HY: EffectList,
+    {
         catch(self, trans)
     }
 
-    fn catch0<Trans, E, H, HY, EUL, RemEUL, HUL>(
+    fn catch0<'h, Trans, E, HY, EUL, RemEUL, HUL>(
         self,
         trans: Trans,
-    ) -> self::catch::Catch0<Self, Trans, H, Y, E, HY, EUL, RemEUL, HUL>
+    ) -> Catch0<'h, Self, Trans, Y, E, HY, EUL, RemEUL, HUL>
     where
-        Trans: FnMut(Sum<E>) -> H,
-        H: Effectful<HY, Return = ControlFlow<Self::Return, Sum<E::ResumeList>>>,
+        Trans: Handler<Self::Return, E, HY> + 'h,
 
         E: EffectList,
         HY: EffectList,
@@ -67,13 +73,12 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         catch(self, trans)
     }
 
-    fn catch1<Trans, E, H, HY, EUL, RemEUL>(
+    fn catch1<'h, Trans, E, HY, EUL, RemEUL>(
         self,
         trans: Trans,
-    ) -> Catch1<Self, Trans, H, Y, E, HY, EUL, RemEUL>
+    ) -> Catch1<'h, Self, Trans, Y, E, HY, EUL, RemEUL>
     where
-        Trans: FnMut(Sum<E>) -> H,
-        H: Effectful<HY, Return = ControlFlow<Self::Return, Sum<E::ResumeList>>>,
+        Trans: Handler<Self::Return, E, HY> + 'h,
 
         E: EffectList,
         HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,

@@ -1,6 +1,6 @@
 use core::{
     fmt::Debug,
-    ops::{Coroutine, CoroutineState, Deref, DerefMut},
+    ops::{ControlFlow, Coroutine, CoroutineState, Deref, DerefMut},
     pin::Pin,
 };
 
@@ -95,6 +95,28 @@ where
     Coro: Coroutine<Sum<(Begin, E::ResumeList)>, Yield = Sum<E>>,
     E: EffectList,
 {
+}
+
+pub trait Handler<T, E: EffectList, F: EffectList = ()> {
+    type Handler<'a>: Effectful<F, Return = ControlFlow<T, Sum<E::ResumeList>>>
+    where
+        Self: 'a;
+
+    fn handle(&mut self, effect: Sum<E>) -> Self::Handler<'_>;
+}
+
+impl<Trans, H, T, E, F> Handler<T, E, F> for Trans
+where
+    Trans: FnMut(Sum<E>) -> H,
+    H: Effectful<F, Return = ControlFlow<T, Sum<E::ResumeList>>>,
+    E: EffectList,
+    F: EffectList,
+{
+    type Handler<'a> = H where Trans: 'a;
+
+    fn handle(&mut self, effect: Sum<E>) -> Self::Handler<'_> {
+        self(effect)
+    }
 }
 
 #[diagnostic::on_unimplemented(

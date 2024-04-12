@@ -12,6 +12,8 @@ use syn::{
     Expr, Ident, Lifetime, Pat, Token, Type,
 };
 
+use crate::Args;
+
 #[derive(Default)]
 struct HandlerPat {
     root_ident: Option<syn::PatIdent>,
@@ -243,7 +245,7 @@ impl Parse for HandlerArgs {
 
 pub struct Handlers {
     hargs: HandlerArgs,
-    args: Option<crate::Args>,
+    args: Option<Args>,
     attrs: Vec<syn::Attribute>,
     root_label: Option<Lifetime>,
     handlers: Vec<Handler>,
@@ -252,7 +254,7 @@ pub struct Handlers {
 impl Parse for Handlers {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut attrs = syn::Attribute::parse_inner(input)?;
-        let args = crate::parse_attrs(&mut attrs, "effectful").transpose()?;
+        let args: Option<Args> = crate::parse_attrs(&mut attrs, "effectful").transpose()?;
         let hargs = crate::parse_attrs(&mut attrs, "handler").transpose()?;
 
         let root_label: Option<Lifetime> = input.parse()?;
@@ -263,6 +265,15 @@ impl Parse for Handlers {
         let mut handlers = Vec::new();
         while !input.is_empty() {
             handlers.push(input.parse()?);
+        }
+
+        if let Some(ref args) = args {
+            if args.is_static.is_some() {
+                return Err(syn::Error::new_spanned(
+                    args.is_static,
+                    "effectful handlers are immovable by default",
+                ));
+            }
         }
 
         Ok(Handlers {
@@ -377,10 +388,10 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
 
     let body = match args {
         Some(args) => {
-            let crate::Args { is_static, is_move, effects } = args;
+            let Args { is_move, effects, .. } = args;
             let resume_types = crate::expr::expand_resume(effects);
 
-            quote!(#is_static #is_move |_: #resume_types| #body)
+            quote!(static #is_move |_: #resume_types| #body)
         }
         None => body,
     };
