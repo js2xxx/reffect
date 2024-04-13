@@ -375,7 +375,7 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
         }
         None => {
             impl_effectless_handler = Some(quote! {
-                impl #generics reffect::effect::EffectlessHandler<#break_ty, #heffect_list> for #self_ty {        
+                impl #generics reffect::effect::Handler<#break_ty, #heffect_list> for #self_ty {
                     fn handle(
                         mut self: core::pin::Pin<&mut Self>,
                         #base_ident: reffect::util::Sum<#heffect_list>,
@@ -392,8 +392,8 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
     };
 
     let impl_handler = quote! {
-        impl #generics reffect::effect::Handler<#break_ty, #heffect_list, #effect_list> for #self_ty {
-            type Handler<'a> = impl reffect::effect::Effectful<
+        impl #generics reffect::effect::Catcher<#break_ty, #heffect_list, #effect_list> for #self_ty {
+            type Catcher<'a> = impl reffect::effect::Effectful<
                 #effect_list,
                 Return = core::ops::ControlFlow<
                     #break_ty,
@@ -403,10 +403,10 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
             where
                 Self: 'a;
 
-            fn handle(
+            fn catch(
                 mut self: core::pin::Pin<&mut Self>,
                 #base_ident: reffect::util::Sum<#heffect_list>,
-            ) -> Self::Handler<'_> {
+            ) -> Self::Catcher<'_> {
                 #body
             }
         }

@@ -11,7 +11,7 @@ pub use self::{
     handle::{handle, Handle},
 };
 use crate::{
-    effect::{EffectList, Effectful, Handler},
+    effect::{Catcher, EffectList, Effectful},
     util::{
         sum_type::{
             range::{ContainsList, SplitList},
@@ -43,26 +43,26 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         handle(self, handler)
     }
 
-    fn catch<'h, Trans, TM, E, HY, OY, MULists>(
+    fn catch<'h, C, CM, E, HY, OY, MULists>(
         self,
-        trans: Trans,
-    ) -> Catch<'h, Self, Trans, TM, Y, E, HY, OY, MULists>
+        catcher: C,
+    ) -> Catch<'h, Self, C, CM, Y, E, HY, OY, MULists>
     where
-        Trans: Handler<Self::Return, E, HY, TM> + 'h,
+        C: Catcher<Self::Return, E, HY, CM> + 'h,
 
         E: EffectList,
         Y: EffectList,
         HY: EffectList,
     {
-        catch(self, trans)
+        catch(self, catcher)
     }
 
-    fn catch0<'h, Trans, TM, E, HY, EUL, RemEUL, HUL>(
+    fn catch0<'h, C, CM, E, HY, EUL, RemEUL, HUL>(
         self,
-        trans: Trans,
-    ) -> Catch0<'h, Self, Trans, TM, Y, E, HY, EUL, RemEUL, HUL>
+        catcher: C,
+    ) -> Catch0<'h, Self, C, CM, Y, E, HY, EUL, RemEUL, HUL>
     where
-        Trans: Handler<Self::Return, E, HY, TM> + 'h,
+        C: Catcher<Self::Return, E, HY, CM> + 'h,
 
         E: EffectList,
         HY: EffectList,
@@ -70,15 +70,15 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         Y: EffectList + ContainsList<E, EUL, RemEUL> + SplitList<HY, HUL>,
         Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL> + SplitList<HY::ResumeList, HUL>,
     {
-        catch(self, trans)
+        catch(self, catcher)
     }
 
-    fn catch1<'h, Trans, TM, E, HY, EUL, RemEUL>(
+    fn catch1<'h, C, CM, E, HY, EUL, RemEUL>(
         self,
-        trans: Trans,
-    ) -> Catch1<'h, Self, Trans, TM, Y, E, HY, EUL, RemEUL>
+        catcher: C,
+    ) -> Catch1<'h, Self, C, CM, Y, E, HY, EUL, RemEUL>
     where
-        Trans: Handler<Self::Return, E, HY, TM> + 'h,
+        C: Catcher<Self::Return, E, HY, CM> + 'h,
 
         E: EffectList,
         HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
@@ -87,7 +87,7 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         Y: EffectList + ContainsList<E, EUL, RemEUL>,
         Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
     {
-        catch(self, trans)
+        catch(self, catcher)
     }
 }
 

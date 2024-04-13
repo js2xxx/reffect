@@ -12,7 +12,7 @@ use pin_project::pin_project;
 
 use crate::{
     adapter::Begin,
-    effect::{EffectList, Handler},
+    effect::{Catcher, EffectList},
     util::{
         narrow_effect_prefixed,
         sum_type::{
@@ -26,13 +26,13 @@ use crate::{
     Effectful,
 };
 
-pub fn catch<'h, Coro, Trans, TM, Y, E, HY, OY, MULists>(
+pub fn catch<'h, Coro, C, CM, Y, E, HY, OY, MULists>(
     coro: Coro,
-    trans: Trans,
-) -> Catch<'h, Coro, Trans, TM, Y, E, HY, OY, MULists>
+    catcher: C,
+) -> Catch<'h, Coro, C, CM, Y, E, HY, OY, MULists>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
+    C: Catcher<Coro::Return, E, HY, CM> + 'h,
 
     E: EffectList,
     Y: EffectList,
@@ -40,7 +40,7 @@ where
 {
     Catch {
         coro,
-        trans,
+        catcher,
         handler: None,
         markers: PhantomData,
         pinned: PhantomPinned,
@@ -48,10 +48,10 @@ where
 }
 
 #[pin_project]
-pub struct Catch<'h, Coro, Trans, TM, Y, E, HY, OY, MULists>
+pub struct Catch<'h, Coro, C, CM, Y, E, HY, OY, MULists>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
+    C: Catcher<Coro::Return, E, HY, CM> + 'h,
 
     E: EffectList,
     Y: EffectList,
@@ -59,25 +59,24 @@ where
 {
     #[pin]
     coro: Coro,
-    // `handler` must be dropped before `trans` since it is actually borrowed from it.
+    // `handler` must be dropped before `catcher` since it is actually borrowed from it.
     //
     // Note: struct fields are dropped in the same order as declared in the struct
     // (source-code-wise, not memory-layout-wise).
     #[pin]
-    handler: Option<Trans::Handler<'h>>,
+    handler: Option<C::Catcher<'h>>,
     #[pin]
-    trans: Trans,
+    catcher: C,
     markers: PhantomData<(Y, E, HY, OY, MULists)>,
     // This struct must be pinned, since it contains a self-referential field (`handler`).
     pinned: PhantomPinned,
 }
 
-impl<'h, Coro, Trans, TM, Y, E, HY, OY, EUL, RemEUL, HOUL, OUL>
-    Coroutine<Sum<(Begin, OY::ResumeList)>>
-    for Catch<'h, Coro, Trans, TM, Y, E, HY, OY, (EUL, RemEUL, HOUL, OUL)>
+impl<'h, Coro, C, CM, Y, E, HY, OY, EUL, RemEUL, HOUL, OUL> Coroutine<Sum<(Begin, OY::ResumeList)>>
+    for Catch<'h, Coro, C, CM, Y, E, HY, OY, (EUL, RemEUL, HOUL, OUL)>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
+    C: Catcher<Coro::Return, E, HY, CM> + 'h,
 
     E: EffectList,
     HY: EffectList,
@@ -102,7 +101,7 @@ where
 
         let mut state: Sum<(Begin, Y::ResumeList)> = match proj.handler.as_mut().as_pin_mut() {
             Some(mut handler) => {
-                // If there's a handler, we must not access `trans`.
+                // If there's a handler, we must not access `catcher`.
                 let state: Sum<Y::ResumeList> = match handler
                     .as_mut()
                     .resume(narrow_effect_prefixed(state, PhantomData::<HY>))
@@ -111,7 +110,7 @@ where
                     Complete(Continue(ret)) => ret.broaden(),
                     Complete(Break(ret)) => return Complete(ret),
                 };
-                // We may access `trans` in the following code, so `handler` must be dropped
+                // We may access `catcher` in the following code, so `handler` must be dropped
                 // first.
                 proj.handler.set(None);
                 state.broaden()
@@ -123,15 +122,15 @@ where
             state = match proj.coro.as_mut().resume(state) {
                 Yielded(y) => match y.narrow() {
                     Ok(eff) => {
-                        // SAFETY: The handler is actually mutably borrowed from `trans`, which
+                        // SAFETY: The handler is actually mutably borrowed from `catcher`, which
                         // indicates that:
                         //
-                        // 1. `trans` must not be dropped before `handler`.
-                        // 2. `trans` must not be accessed when `handler` is alive in the scope.
+                        // 1. `catcher` must not be dropped before `handler`.
+                        // 2. `catcher` must not be accessed when `handler` is alive in the scope.
                         //
                         // Thus, we can safely extend its lifetime to almost `'h`.
-                        let handler: Trans::Handler<'h> =
-                            unsafe { core::mem::transmute(proj.trans.as_mut().handle(eff)) };
+                        let handler: C::Catcher<'h> =
+                            unsafe { core::mem::transmute(proj.catcher.as_mut().catch(eff)) };
                         proj.handler.set(Some(handler));
 
                         let handler = proj.handler.as_mut().as_pin_mut().unwrap();
@@ -140,7 +139,7 @@ where
                             Complete(Continue(ret)) => ret.broaden(),
                             Complete(Break(ret)) => break Complete(ret),
                         };
-                        // We may access `trans` in the next iteration of the loop, so `handler`
+                        // We may access `catcher` in the next iteration of the loop, so `handler`
                         // must be dropped first.
                         proj.handler.set(None);
                         state.broaden()
@@ -153,16 +152,16 @@ where
     }
 }
 
-pub type Catch0<'h, Coro, Trans, TM, Y, E, HY, EUL, RemEUL, HUL> =
-    Catch<'h, Coro, Trans, TM, Y, E, HY, Y, (EUL, RemEUL, HUL, RemEUL)>;
+pub type Catch0<'h, Coro, C, CM, Y, E, HY, EUL, RemEUL, HUL> =
+    Catch<'h, Coro, C, CM, Y, E, HY, Y, (EUL, RemEUL, HUL, RemEUL)>;
 
-pub fn catch0<'h, Coro, Trans, TM, E, Y, HY, EUL, RemEUL, HUL>(
+pub fn catch0<'h, Coro, C, CM, E, Y, HY, EUL, RemEUL, HUL>(
     coro: Coro,
-    trans: Trans,
-) -> Catch0<'h, Coro, Trans, TM, Y, E, HY, EUL, RemEUL, HUL>
+    catcher: C,
+) -> Catch0<'h, Coro, C, CM, Y, E, HY, EUL, RemEUL, HUL>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
+    C: Catcher<Coro::Return, E, HY, CM> + 'h,
 
     E: EffectList,
     HY: EffectList,
@@ -170,14 +169,14 @@ where
     Y: EffectList + ContainsList<E, EUL, RemEUL> + SplitList<HY, HUL>,
     Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL> + SplitList<HY::ResumeList, HUL>,
 {
-    catch(coro, trans)
+    catch(coro, catcher)
 }
 
-pub type Catch1<'h, Coro, Trans, TM, Y, E, HY, EUL, RemEUL> = Catch<
+pub type Catch1<'h, Coro, C, CM, Y, E, HY, EUL, RemEUL> = Catch<
     'h,
     Coro,
-    Trans,
-    TM,
+    C,
+    CM,
     Y,
     E,
     HY,
@@ -190,13 +189,13 @@ pub type Catch1<'h, Coro, Trans, TM, Y, E, HY, EUL, RemEUL> = Catch<
     ),
 >;
 
-pub fn catch1<'h, Coro, Trans, TM, E, Y, HY, EUL, RemEUL>(
+pub fn catch1<'h, Coro, C, CM, E, Y, HY, EUL, RemEUL>(
     coro: Coro,
-    trans: Trans,
-) -> Catch1<'h, Coro, Trans, TM, Y, E, HY, EUL, RemEUL>
+    catcher: C,
+) -> Catch1<'h, Coro, C, CM, Y, E, HY, EUL, RemEUL>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
+    C: Catcher<Coro::Return, E, HY, CM> + 'h,
 
     E: EffectList,
     HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
@@ -205,5 +204,5 @@ where
     Y: EffectList + ContainsList<E, EUL, RemEUL>,
     Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
 {
-    catch(coro, trans)
+    catch(coro, catcher)
 }

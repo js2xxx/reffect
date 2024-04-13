@@ -97,73 +97,64 @@ where
 {
 }
 
-pub trait Handler<T, E: EffectList, F: EffectList = (), Marker = ()> {
-    type Handler<'a>: Effectful<F, Return = ControlFlow<T, Sum<E::ResumeList>>>
+pub trait Catcher<T, E: EffectList, F: EffectList = (), Marker = ()> {
+    type Catcher<'a>: Effectful<F, Return = ControlFlow<T, Sum<E::ResumeList>>>
     where
         Self: 'a;
 
-    fn handle(self: Pin<&mut Self>, effect: Sum<E>) -> Self::Handler<'_>;
+    fn catch(self: Pin<&mut Self>, effect: Sum<E>) -> Self::Catcher<'_>;
 }
 
-impl<H, T, E, F> Handler<T, E, F> for &mut H
+impl<H, T, E, F> Catcher<T, E, F> for &mut H
 where
-    H: Handler<T, E, F> + Unpin,
+    H: Catcher<T, E, F> + Unpin,
     E: EffectList,
     F: EffectList,
 {
-    type Handler<'a> = H::Handler<'a>
+    type Catcher<'a> = H::Catcher<'a>
     where
         Self: 'a;
 
-    fn handle(self: Pin<&mut Self>, effect: Sum<E>) -> Self::Handler<'_> {
+    fn catch(self: Pin<&mut Self>, effect: Sum<E>) -> Self::Catcher<'_> {
+        H::catch(Pin::new(*self.get_mut()), effect)
+    }
+}
+
+impl<H, T, E, F> Catcher<T, E, F> for Pin<&mut H>
+where
+    H: Catcher<T, E, F>,
+    E: EffectList,
+    F: EffectList,
+{
+    type Catcher<'a> = H::Catcher<'a>
+    where
+        Self: 'a;
+
+    fn catch(self: Pin<&mut Self>, effect: Sum<E>) -> Self::Catcher<'_> {
+        H::catch(self.get_mut().as_mut(), effect)
+    }
+}
+
+pub trait Handler<T, E: EffectList, Marker = ()> {
+    fn handle(self: Pin<&mut Self>, effect: Sum<E>) -> ControlFlow<T, Sum<E::ResumeList>>;
+}
+
+impl<H, T, E> Handler<T, E> for &mut H
+where
+    H: Handler<T, E> + Unpin,
+    E: EffectList,
+{
+    fn handle(self: Pin<&mut Self>, effect: Sum<E>) -> ControlFlow<T, Sum<E::ResumeList>> {
         H::handle(Pin::new(*self.get_mut()), effect)
     }
 }
 
-impl<H, T, E, F> Handler<T, E, F> for Pin<&mut H>
+impl<H, T, E> Handler<T, E> for Pin<&mut H>
 where
-    H: Handler<T, E, F>,
-    E: EffectList,
-    F: EffectList,
-{
-    type Handler<'a> = H::Handler<'a>
-    where
-        Self: 'a;
-
-    fn handle(self: Pin<&mut Self>, effect: Sum<E>) -> Self::Handler<'_> {
-        H::handle(self.get_mut().as_mut(), effect)
-    }
-}
-
-pub trait EffectlessHandler<T, E: EffectList, Marker = ()> {
-    fn handle(
-        self: Pin<&mut Self>,
-        effect: Sum<E>,
-    ) -> ControlFlow<T, Sum<E::ResumeList>>;
-}
-
-impl<H, T, E> EffectlessHandler<T, E> for &mut H
-where
-    H: EffectlessHandler<T, E> + Unpin,
+    H: Handler<T, E>,
     E: EffectList,
 {
-    fn handle(
-        self: Pin<&mut Self>,
-        effect: Sum<E>,
-    ) -> ControlFlow<T, Sum<E::ResumeList>> {
-        H::handle(Pin::new(*self.get_mut()), effect)
-    }
-}
-
-impl<H, T, E> EffectlessHandler<T, E> for Pin<&mut H>
-where
-    H: EffectlessHandler<T, E>,
-    E: EffectList,
-{
-    fn handle(
-        self: Pin<&mut Self>,
-        effect: Sum<E>,
-    ) -> ControlFlow<T, Sum<E::ResumeList>> {
+    fn handle(self: Pin<&mut Self>, effect: Sum<E>) -> ControlFlow<T, Sum<E::ResumeList>> {
         H::handle(self.get_mut().as_mut(), effect)
     }
 }
@@ -227,29 +218,26 @@ where
     }
 }
 
-impl<Trans, H, T, E, F> Handler<T, E, F, FuncMarker> for Trans
+impl<C, H, T, E, F> Catcher<T, E, F, FuncMarker> for C
 where
-    Trans: FnMut(Sum<E>) -> H + Unpin,
+    C: FnMut(Sum<E>) -> H + Unpin,
     H: Effectful<F, Return = ControlFlow<T, Sum<E::ResumeList>>>,
     E: EffectList,
     F: EffectList,
 {
-    type Handler<'a> = H where Trans: 'a;
+    type Catcher<'a> = H where C: 'a;
 
-    fn handle(mut self: Pin<&mut Self>, effect: Sum<E>) -> Self::Handler<'_> {
+    fn catch(mut self: Pin<&mut Self>, effect: Sum<E>) -> Self::Catcher<'_> {
         self(effect)
     }
 }
 
-impl<H, T, E> EffectlessHandler<T, E, FuncMarker> for H
+impl<H, T, E> Handler<T, E, FuncMarker> for H
 where
     H: FnMut(Sum<E>) -> ControlFlow<T, Sum<E::ResumeList>> + Unpin,
     E: EffectList,
 {
-    fn handle(
-        mut self: Pin<&mut Self>,
-        effect: Sum<E>,
-    ) -> ControlFlow<T, Sum<E::ResumeList>> {
+    fn handle(mut self: Pin<&mut Self>, effect: Sum<E>) -> ControlFlow<T, Sum<E::ResumeList>> {
         self(effect)
     }
 }

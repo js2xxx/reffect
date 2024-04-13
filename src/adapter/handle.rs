@@ -12,7 +12,7 @@ use pin_project::pin_project;
 
 use super::Begin;
 use crate::{
-    effect::{EffectList, Effectful, EffectlessHandler},
+    effect::{EffectList, Effectful, Handler},
     util::{
         sum_type::{
             range::{ContainsList, SplitList},
@@ -46,7 +46,7 @@ impl<Coro, Y, H, HM, E, RemUL, UL>
     for Handle<Coro, H, (HM, Y, E, RemUL, UL)>
 where
     Coro: Effectful<Y>,
-    H: EffectlessHandler<Coro::Return, E, HM>,
+    H: Handler<Coro::Return, E, HM>,
 
     Y: EffectList,
     E: EffectList,
