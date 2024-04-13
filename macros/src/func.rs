@@ -6,8 +6,8 @@ use syn::{parse_quote, spanned::Spanned, visit_mut::VisitMut, Error, Ident, Item
 
 use crate::{Args, DesugarExpr};
 
-pub fn expand_func(args: Args, mut item: ItemFn) -> syn::Result<ItemFn> {
-    let Args { is_static, is_move, mut effects } = args;
+pub fn expand_func(args: &mut Args, mut item: ItemFn) -> syn::Result<ItemFn> {
+    let Args { is_static, is_move, effects } = args;
     if is_move.is_some() {
         return Err(Error::new_spanned(
             is_move,
@@ -15,11 +15,12 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> syn::Result<ItemFn> {
         ));
     }
 
-    if item.sig.asyncness.take().is_some() {
-        effects.insert(1, parse_quote!(reffect::future::Async));
+    let async_eff = parse_quote!(reffect::future::Async);
+    if item.sig.asyncness.take().is_some() && effects.iter().all(|e| *e != async_eff) {
+        effects.insert(0, async_eff);
     }
 
-    let resume_types = crate::expr::expand_resume(&effects);
+    let resume_types = crate::expr::expand_resume(&*effects);
 
     let iter = item.sig.inputs.iter_mut().enumerate().map(|(i, arg)| {
         let substitute = format_ident!("arg{}", i);
@@ -47,7 +48,7 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> syn::Result<ItemFn> {
         syn::ReturnType::Type(_, ty) => ty,
     };
 
-    let effect_list = crate::expr::expand_effect(&effects);
+    let effect_list = crate::expr::expand_effect(&*effects);
     item.sig.output = parse_quote! {
         -> impl reffect::Effectful<#effect_list, Return = #output>
     };
@@ -69,7 +70,7 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> syn::Result<ItemFn> {
         }
     };
 
-    Ok(parse_quote!(#item))
+    Ok(item)
 }
 
 struct ReplaceReceiver(Ident);

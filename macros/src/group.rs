@@ -107,7 +107,7 @@ fn expand_group_effect(
 }
 
 fn expand_group_effect_impl(
-    args: Option<&Args>,
+    args: Option<&mut Args>,
     self_ty: &Type,
     group_ident: &Ident,
     item: syn::ImplItemFn,
@@ -165,8 +165,10 @@ fn expand_group_effect_impl(
         #(#attrs)* #sig #block
     };
 
+    let mut is_effectful = false;
     if let Some(args) = args {
-        func = crate::func::expand_func(args.clone(), func)?;
+        is_effectful = true;
+        func = crate::func::expand_func(args, func)?;
     }
     let syn::Signature { ident, inputs, .. } = &sig;
 
@@ -175,6 +177,7 @@ fn expand_group_effect_impl(
         syn::FnArg::Typed(syn::PatType { pat, .. }) => Some(pat),
     });
     let call_args: Vec<_> = call_args.collect();
+
     let has_receiver = inputs
         .iter()
         .any(|arg| matches!(arg, syn::FnArg::Receiver(_)));
@@ -183,7 +186,8 @@ fn expand_group_effect_impl(
     } else {
         quote!(<#self_ty>::#ident(#(#call_args,)*))
     };
-    if args.is_some() {
+
+    if is_effectful {
         expr = quote!(#expr.await);
     }
 
@@ -296,7 +300,7 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
         None => return Err(syn::Error::new_spanned(group_path, "empty trait path")),
     };
 
-    let args = crate::parse_attrs::<Args>(&mut attrs, "effectful").transpose()?;
+    let mut args = crate::parse_attrs::<Args>(&mut attrs, "effectful").transpose()?;
 
     let unsafety = unsafety.is_some();
     let check_unsafety = quote! {
@@ -310,7 +314,7 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
     let mut effects = (Vec::new(), Vec::new());
     let iter = items.into_iter().map(|item| match item {
         syn::ImplItem::Fn(func) => expand_group_effect_impl(
-            args.as_ref(),
+            args.as_mut(),
             &self_ty,
             group_ident,
             func,

@@ -119,9 +119,9 @@ pub fn effectful(
     args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let args = parse_macro_input!(args as Args);
+    let mut args = parse_macro_input!(args as Args);
     let input = parse_macro_input!(input as syn::ItemFn);
-    match func::expand_func(args, input) {
+    match func::expand_func(&mut args, input) {
         Ok(output) => output.to_token_stream().into(),
         Err(e) => e.to_compile_error().into(),
     }
