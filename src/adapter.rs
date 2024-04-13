@@ -234,7 +234,7 @@ mod test {
         let coro = coro.catch0(amp);
 
         let mut counter = CounterImpl(0);
-        let coro = coro.catch1(&mut counter);
+        let coro = coro.handle(&mut counter);
 
         assert_eq!(coro.run(), 10);
         assert_eq!(counter.get::<()>(), core::ops::ControlFlow::Continue(100));

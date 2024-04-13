@@ -1,7 +1,7 @@
 use core::{
     marker::PhantomData,
     ops::{
-        ControlFlow::{self, *},
+        ControlFlow::*,
         Coroutine,
         CoroutineState::{self, *},
     },
@@ -12,7 +12,7 @@ use pin_project::pin_project;
 
 use super::Begin;
 use crate::{
-    effect::{EffectList, Effectful},
+    effect::{EffectList, Effectful, EffectlessHandler},
     util::{
         sum_type::{
             range::{ContainsList, SplitList},
@@ -36,15 +36,17 @@ pub fn handle<Coro, H, Markers>(coro: Coro, handler: H) -> Handle<Coro, H, Marke
 pub struct Handle<Coro, H, Markers> {
     #[pin]
     coro: Coro,
+    #[pin]
     handler: H,
     markers: PhantomData<Markers>,
 }
 
-impl<Coro, Y, H, E, RemUL, UL> Coroutine<Sum<(Begin, NarrowRem<Y::ResumeList, E::ResumeList, UL>)>>
-    for Handle<Coro, H, (Y, E, RemUL, UL)>
+impl<Coro, Y, H, HM, E, RemUL, UL>
+    Coroutine<Sum<(Begin, NarrowRem<Y::ResumeList, E::ResumeList, UL>)>>
+    for Handle<Coro, H, (HM, Y, E, RemUL, UL)>
 where
     Coro: Effectful<Y>,
-    H: FnMut(Sum<E>) -> ControlFlow<Coro::Return, Sum<E::ResumeList>>,
+    H: EffectlessHandler<Coro::Return, E, HM>,
 
     Y: EffectList,
     E: EffectList,
@@ -68,7 +70,7 @@ where
             match proj.coro.as_mut().resume(state) {
                 Yielded(yielded) => {
                     let r: Sum<Y::ResumeList> = match yielded.narrow() {
-                        Ok(narrowed) => match (proj.handler)(narrowed) {
+                        Ok(narrowed) => match proj.handler.as_mut().handle(narrowed) {
                             Continue(r) => r.broaden(),
                             Break(ret) => break Complete(ret),
                         },

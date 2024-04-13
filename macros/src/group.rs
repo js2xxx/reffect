@@ -367,12 +367,28 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
         &args,
     );
 
+    let mut impl_effectless_handler = None;
     let body = match args {
         Some(args) => {
             let resume_ty = crate::expr::expand_resume(&args.effects);
             quote!(static move |_: #resume_ty| #body)
         }
-        None => quote!(reffect::effect::IntoCoroutine::into_coroutine(move || #body)),
+        None => {
+            impl_effectless_handler = Some(quote! {
+                impl #generics reffect::effect::EffectlessHandler<#break_ty, #heffect_list> for #self_ty {        
+                    fn handle(
+                        mut self: core::pin::Pin<&mut Self>,
+                        #base_ident: reffect::util::Sum<#heffect_list>,
+                    ) -> core::ops::ControlFlow<
+                        #break_ty,
+                        reffect::util::Sum<<#heffect_list as reffect::effect::EffectList>::ResumeList>,
+                    > {
+                        #body
+                    }
+                }
+            });
+            quote!(reffect::effect::IntoCoroutine::into_coroutine(move || #body))
+        }
     };
 
     let impl_handler = quote! {
@@ -396,5 +412,5 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
         }
     };
 
-    Ok(quote!(#impl_ #impl_handler))
+    Ok(quote!(#impl_ #impl_handler #impl_effectless_handler))
 }

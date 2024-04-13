@@ -135,6 +135,39 @@ where
     }
 }
 
+pub trait EffectlessHandler<T, E: EffectList, Marker = ()> {
+    fn handle(
+        self: Pin<&mut Self>,
+        effect: Sum<E>,
+    ) -> ControlFlow<T, Sum<E::ResumeList>>;
+}
+
+impl<H, T, E> EffectlessHandler<T, E> for &mut H
+where
+    H: EffectlessHandler<T, E> + Unpin,
+    E: EffectList,
+{
+    fn handle(
+        self: Pin<&mut Self>,
+        effect: Sum<E>,
+    ) -> ControlFlow<T, Sum<E::ResumeList>> {
+        H::handle(Pin::new(*self.get_mut()), effect)
+    }
+}
+
+impl<H, T, E> EffectlessHandler<T, E> for Pin<&mut H>
+where
+    H: EffectlessHandler<T, E>,
+    E: EffectList,
+{
+    fn handle(
+        self: Pin<&mut Self>,
+        effect: Sum<E>,
+    ) -> ControlFlow<T, Sum<E::ResumeList>> {
+        H::handle(self.get_mut().as_mut(), effect)
+    }
+}
+
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not a coroutine",
     label = "`{Self}` is not a coroutine",
@@ -204,6 +237,19 @@ where
     type Handler<'a> = H where Trans: 'a;
 
     fn handle(mut self: Pin<&mut Self>, effect: Sum<E>) -> Self::Handler<'_> {
+        self(effect)
+    }
+}
+
+impl<H, T, E> EffectlessHandler<T, E, FuncMarker> for H
+where
+    H: FnMut(Sum<E>) -> ControlFlow<T, Sum<E::ResumeList>> + Unpin,
+    E: EffectList,
+{
+    fn handle(
+        mut self: Pin<&mut Self>,
+        effect: Sum<E>,
+    ) -> ControlFlow<T, Sum<E::ResumeList>> {
         self(effect)
     }
 }
