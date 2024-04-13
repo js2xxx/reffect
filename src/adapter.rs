@@ -209,7 +209,7 @@ mod test {
     #[crate::group_handler]
     #[effectful(Counter)]
     impl Counter for CounterAmplifier {
-        fn inc(&mut self, delta: u32) {
+        fn inc(&self, delta: u32) {
             Counter::inc(delta * self.0).await
         }
 
