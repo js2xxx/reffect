@@ -107,7 +107,7 @@ fn expand_group_effect(
 }
 
 fn expand_group_effect_impl(
-    args: Option<&mut Args>,
+    args: &mut Option<Args>,
     self_ty: &Type,
     group_ident: &Ident,
     item: syn::ImplItemFn,
@@ -121,6 +121,10 @@ fn expand_group_effect_impl(
         mut sig,
         mut block,
     } = item;
+
+    if sig.asyncness.is_some() && args.is_none() {
+        *args = Some(Default::default());
+    }
 
     if vis0 != syn::Visibility::Inherited {
         return Err(syn::Error::new_spanned(
@@ -314,7 +318,7 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
     let mut effects = (Vec::new(), Vec::new());
     let iter = items.into_iter().map(|item| match item {
         syn::ImplItem::Fn(func) => expand_group_effect_impl(
-            args.as_mut(),
+            &mut args,
             &self_ty,
             group_ident,
             func,
