@@ -97,25 +97,41 @@ where
 {
 }
 
-pub trait Handler<T, E: EffectList, F: EffectList = ()> {
+pub trait Handler<T, E: EffectList, F: EffectList = (), Marker = ()> {
     type Handler<'a>: Effectful<F, Return = ControlFlow<T, Sum<E::ResumeList>>>
     where
         Self: 'a;
 
-    fn handle(&mut self, effect: Sum<E>) -> Self::Handler<'_>;
+    fn handle(self: Pin<&mut Self>, effect: Sum<E>) -> Self::Handler<'_>;
 }
 
-impl<Trans, H, T, E, F> Handler<T, E, F> for Trans
+impl<H, T, E, F> Handler<T, E, F> for &mut H
 where
-    Trans: FnMut(Sum<E>) -> H,
-    H: Effectful<F, Return = ControlFlow<T, Sum<E::ResumeList>>>,
+    H: Handler<T, E, F> + Unpin,
     E: EffectList,
     F: EffectList,
 {
-    type Handler<'a> = H where Trans: 'a;
+    type Handler<'a> = H::Handler<'a>
+    where
+        Self: 'a;
 
-    fn handle(&mut self, effect: Sum<E>) -> Self::Handler<'_> {
-        self(effect)
+    fn handle(self: Pin<&mut Self>, effect: Sum<E>) -> Self::Handler<'_> {
+        H::handle(Pin::new(*self.get_mut()), effect)
+    }
+}
+
+impl<H, T, E, F> Handler<T, E, F> for Pin<&mut H>
+where
+    H: Handler<T, E, F>,
+    E: EffectList,
+    F: EffectList,
+{
+    type Handler<'a> = H::Handler<'a>
+    where
+        Self: 'a;
+
+    fn handle(self: Pin<&mut Self>, effect: Sum<E>) -> Self::Handler<'_> {
+        H::handle(self.get_mut().as_mut(), effect)
     }
 }
 
@@ -175,5 +191,19 @@ where
 
     fn into_coroutine(self) -> Self::IntoCoroutine {
         FuncCoro(Some(self))
+    }
+}
+
+impl<Trans, H, T, E, F> Handler<T, E, F, FuncMarker> for Trans
+where
+    Trans: FnMut(Sum<E>) -> H + Unpin,
+    H: Effectful<F, Return = ControlFlow<T, Sum<E::ResumeList>>>,
+    E: EffectList,
+    F: EffectList,
+{
+    type Handler<'a> = H where Trans: 'a;
+
+    fn handle(mut self: Pin<&mut Self>, effect: Sum<E>) -> Self::Handler<'_> {
+        self(effect)
     }
 }

@@ -5,13 +5,14 @@
 mod block;
 mod expr;
 mod func;
+mod group;
 mod handler;
 
 use proc_macro2::Span;
 use quote::ToTokens;
 use syn::{parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Token};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Args {
     is_static: Option<Token![static]>,
     is_move: Option<Token![move]>,
@@ -120,13 +121,47 @@ pub fn effectful(
 ) -> proc_macro::TokenStream {
     let args = parse_macro_input!(args as Args);
     let input = parse_macro_input!(input as syn::ItemFn);
-    func::expand_func(args, input).into()
+    match func::expand_func(args, input) {
+        Ok(output) => output.to_token_stream().into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+#[proc_macro_attribute]
+pub fn group(
+    args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    if !args.is_empty() {
+        return quote::quote!(compile_error!("arguments not be empty")).into();
+    }
+    let input = parse_macro_input!(input as syn::ItemTrait);
+    match group::expand_group(input) {
+        Ok(output) => output.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 #[proc_macro]
 pub fn handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let handlers = parse_macro_input!(input as handler::Handlers);
-    handler::expand_handler(handlers).into()
+    handler::expand_handlers(handlers).into()
+}
+
+#[proc_macro_attribute]
+pub fn group_handler(
+    args: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let break_ty = match (!args.is_empty()).then(|| syn::parse(args)).transpose() {
+        Ok(ty) => ty,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    let input = parse_macro_input!(input as syn::ItemImpl);
+    match group::expand_group_handler(break_ty, input) {
+        Ok(output) => output.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 #[proc_macro]

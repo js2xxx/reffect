@@ -26,13 +26,13 @@ use crate::{
     Effectful,
 };
 
-pub fn catch<'h, Coro, Trans, Y, E, HY, OY, MULists>(
+pub fn catch<'h, Coro, Trans, TM, Y, E, HY, OY, MULists>(
     coro: Coro,
     trans: Trans,
-) -> Catch<'h, Coro, Trans, Y, E, HY, OY, MULists>
+) -> Catch<'h, Coro, Trans, TM, Y, E, HY, OY, MULists>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY> + 'h,
+    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
 
     E: EffectList,
     Y: EffectList,
@@ -48,10 +48,10 @@ where
 }
 
 #[pin_project]
-pub struct Catch<'h, Coro, Trans, Y, E, HY, OY, MULists>
+pub struct Catch<'h, Coro, Trans, TM, Y, E, HY, OY, MULists>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY> + 'h,
+    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
 
     E: EffectList,
     Y: EffectList,
@@ -65,17 +65,19 @@ where
     // (source-code-wise, not memory-layout-wise).
     #[pin]
     handler: Option<Trans::Handler<'h>>,
+    #[pin]
     trans: Trans,
     markers: PhantomData<(Y, E, HY, OY, MULists)>,
     // This struct must be pinned, since it contains a self-referential field (`handler`).
     pinned: PhantomPinned,
 }
 
-impl<'h, Coro, Trans, Y, E, HY, OY, EUL, RemEUL, HOUL, OUL> Coroutine<Sum<(Begin, OY::ResumeList)>>
-    for Catch<'h, Coro, Trans, Y, E, HY, OY, (EUL, RemEUL, HOUL, OUL)>
+impl<'h, Coro, Trans, TM, Y, E, HY, OY, EUL, RemEUL, HOUL, OUL>
+    Coroutine<Sum<(Begin, OY::ResumeList)>>
+    for Catch<'h, Coro, Trans, TM, Y, E, HY, OY, (EUL, RemEUL, HOUL, OUL)>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY> + 'h,
+    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
 
     E: EffectList,
     HY: EffectList,
@@ -129,7 +131,7 @@ where
                         //
                         // Thus, we can safely extend its lifetime to almost `'h`.
                         let handler: Trans::Handler<'h> =
-                            unsafe { core::mem::transmute(proj.trans.handle(eff)) };
+                            unsafe { core::mem::transmute(proj.trans.as_mut().handle(eff)) };
                         proj.handler.set(Some(handler));
 
                         let handler = proj.handler.as_mut().as_pin_mut().unwrap();
@@ -151,16 +153,16 @@ where
     }
 }
 
-pub type Catch0<'h, Coro, Trans, Y, E, HY, EUL, RemEUL, HUL> =
-    Catch<'h, Coro, Trans, Y, E, HY, Y, (EUL, RemEUL, HUL, RemEUL)>;
+pub type Catch0<'h, Coro, Trans, TM, Y, E, HY, EUL, RemEUL, HUL> =
+    Catch<'h, Coro, Trans, TM, Y, E, HY, Y, (EUL, RemEUL, HUL, RemEUL)>;
 
-pub fn catch0<'h, Coro, Trans, E, Y, HY, EUL, RemEUL, HUL>(
+pub fn catch0<'h, Coro, Trans, TM, E, Y, HY, EUL, RemEUL, HUL>(
     coro: Coro,
     trans: Trans,
-) -> Catch0<'h, Coro, Trans, Y, E, HY, EUL, RemEUL, HUL>
+) -> Catch0<'h, Coro, Trans, TM, Y, E, HY, EUL, RemEUL, HUL>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY> + 'h,
+    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
 
     E: EffectList,
     HY: EffectList,
@@ -171,10 +173,11 @@ where
     catch(coro, trans)
 }
 
-pub type Catch1<'h, Coro, Trans, Y, E, HY, EUL, RemEUL> = Catch<
+pub type Catch1<'h, Coro, Trans, TM, Y, E, HY, EUL, RemEUL> = Catch<
     'h,
     Coro,
     Trans,
+    TM,
     Y,
     E,
     HY,
@@ -187,13 +190,13 @@ pub type Catch1<'h, Coro, Trans, Y, E, HY, EUL, RemEUL> = Catch<
     ),
 >;
 
-pub fn catch1<'h, Coro, Trans, E, Y, HY, EUL, RemEUL>(
+pub fn catch1<'h, Coro, Trans, TM, E, Y, HY, EUL, RemEUL>(
     coro: Coro,
     trans: Trans,
-) -> Catch1<'h, Coro, Trans, Y, E, HY, EUL, RemEUL>
+) -> Catch1<'h, Coro, Trans, TM, Y, E, HY, EUL, RemEUL>
 where
     Coro: Effectful<Y>,
-    Trans: Handler<Coro::Return, E, HY> + 'h,
+    Trans: Handler<Coro::Return, E, HY, TM> + 'h,
 
     E: EffectList,
     HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,

@@ -5,6 +5,8 @@
 #![deny(rust_2024_compatibility)]
 #![feature(coroutines)]
 #![feature(coroutine_trait)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(lifetime_capture_rules_2024)]
 #![feature(macro_metavar_expr)]
 #![feature(noop_waker)]
 
@@ -16,7 +18,9 @@ pub mod util;
 #[cfg(test)]
 extern crate std;
 
-pub use reffect_macros::{do_await, do_yield, effectful, effectful_block, handler, EffectList};
+pub use reffect_macros::{
+    do_await, do_yield, effectful, effectful_block, group, group_handler, handler, EffectList,
+};
 
 pub use self::{
     adapter::EffectfulExt,

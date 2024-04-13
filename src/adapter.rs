@@ -43,12 +43,12 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         handle(self, handler)
     }
 
-    fn catch<'h, Trans, E, HY, OY, MULists>(
+    fn catch<'h, Trans, TM, E, HY, OY, MULists>(
         self,
         trans: Trans,
-    ) -> Catch<'h, Self, Trans, Y, E, HY, OY, MULists>
+    ) -> Catch<'h, Self, Trans, TM, Y, E, HY, OY, MULists>
     where
-        Trans: Handler<Self::Return, E, HY> + 'h,
+        Trans: Handler<Self::Return, E, HY, TM> + 'h,
 
         E: EffectList,
         Y: EffectList,
@@ -57,12 +57,12 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         catch(self, trans)
     }
 
-    fn catch0<'h, Trans, E, HY, EUL, RemEUL, HUL>(
+    fn catch0<'h, Trans, TM, E, HY, EUL, RemEUL, HUL>(
         self,
         trans: Trans,
-    ) -> Catch0<'h, Self, Trans, Y, E, HY, EUL, RemEUL, HUL>
+    ) -> Catch0<'h, Self, Trans, TM, Y, E, HY, EUL, RemEUL, HUL>
     where
-        Trans: Handler<Self::Return, E, HY> + 'h,
+        Trans: Handler<Self::Return, E, HY, TM> + 'h,
 
         E: EffectList,
         HY: EffectList,
@@ -73,12 +73,12 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
         catch(self, trans)
     }
 
-    fn catch1<'h, Trans, E, HY, EUL, RemEUL>(
+    fn catch1<'h, Trans, TM, E, HY, EUL, RemEUL>(
         self,
         trans: Trans,
-    ) -> Catch1<'h, Self, Trans, Y, E, HY, EUL, RemEUL>
+    ) -> Catch1<'h, Self, Trans, TM, Y, E, HY, EUL, RemEUL>
     where
-        Trans: Handler<Self::Return, E, HY> + 'h,
+        Trans: Handler<Self::Return, E, HY, TM> + 'h,
 
         E: EffectList,
         HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
@@ -182,5 +182,61 @@ mod test {
         });
 
         assert_eq!(coro.run(), 2);
+    }
+
+    #[crate::group]
+    trait Counter {
+        fn inc(delta: u32);
+
+        fn get() -> u32;
+    }
+
+    struct CounterImpl(u32);
+
+    #[crate::group_handler]
+    impl Counter for CounterImpl {
+        fn inc(&mut self, delta: u32) {
+            self.0 += delta;
+        }
+
+        fn get(&self) -> u32 {
+            self.0
+        }
+    }
+
+    struct CounterAmplifier(u32);
+
+    #[crate::group_handler]
+    #[effectful(Counter)]
+    impl Counter for CounterAmplifier {
+        fn inc(&mut self, delta: u32) {
+            Counter::inc(delta * self.0).await
+        }
+
+        fn get(&self) -> u32 {
+            Counter::get().await / self.0
+        }
+    }
+
+    #[test]
+    fn group() {
+        let coro = effectful_block! {
+            #![effectful(Counter)]
+
+            let counter = Counter::get().await;
+            if counter < 10 {
+                Counter::inc(10 - counter).await;
+            }
+            Counter::get().await
+        };
+
+        let amp = CounterAmplifier(10);
+        let coro = coro.catch0(amp);
+
+        let mut counter = CounterImpl(0);
+        let coro = coro.catch(&mut counter);
+
+        assert_eq!(coro.run(), 10);
+        assert_eq!(counter.get::<()>(), core::ops::ControlFlow::Continue(100));
     }
 }

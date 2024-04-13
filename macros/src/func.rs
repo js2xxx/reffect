@@ -1,16 +1,18 @@
 use std::mem;
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::format_ident;
 use syn::{parse_quote, spanned::Spanned, visit_mut::VisitMut, Error, Ident, ItemFn};
 
 use crate::{Args, DesugarExpr};
 
-pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
+pub fn expand_func(args: Args, mut item: ItemFn) -> syn::Result<ItemFn> {
     let Args { is_static, is_move, mut effects } = args;
     if is_move.is_some() {
-        return Error::new_spanned(is_move, "effectful functions moves by default")
-            .into_compile_error();
+        return Err(Error::new_spanned(
+            is_move,
+            "effectful functions moves by default",
+        ));
     }
 
     if item.sig.asyncness.take().is_some() {
@@ -67,7 +69,7 @@ pub fn expand_func(args: Args, mut item: ItemFn) -> TokenStream {
         }
     };
 
-    quote!(#item)
+    Ok(parse_quote!(#item))
 }
 
 struct ReplaceReceiver(Ident);

@@ -2,6 +2,8 @@
 
 ## Examples
 
+### Standalone effects
+
 ```rust
 #![feature(coroutines)]
 
@@ -46,12 +48,74 @@ assert_eq!(ret.run(), 2);
 
 ```
 
+### Grouped effects
+
+```rust
+#![feature(coroutines, coroutine_trait)]
+#![feature(impl_trait_in_assoc_type)]
+#![feature(lifetime_capture_rules_2024)]
+
+use reffect::*;
+
+#[group]
+trait Counter {
+    fn inc(delta: u32);
+
+    fn get() -> u32;
+}
+
+struct CounterImpl(u32);
+
+#[group_handler]
+impl Counter for CounterImpl {
+    fn inc(&mut self, delta: u32) {
+        self.0 += delta;
+    }
+
+    fn get(&self) -> u32 {
+        self.0
+    }
+}
+
+struct CounterAmplifier(u32);
+
+#[group_handler]
+#[effectful(Counter)]
+impl Counter for CounterAmplifier {
+    fn inc(&mut self, delta: u32) {
+        Counter::inc(delta * self.0).await
+    }
+
+    fn get(&self) -> u32 {
+        Counter::get().await / self.0
+    }
+}
+
+let coro = effectful_block! {
+    #![effectful(Counter)]
+
+    let counter = Counter::get().await;
+    if counter < 10 {
+        Counter::inc(10 - counter).await;
+    }
+    Counter::get().await
+};
+
+let coro = coro.catch0(CounterAmplifier(10));
+
+let mut counter = CounterImpl(0);
+let coro = coro.catch(&mut counter);
+
+assert_eq!(coro.run(), 10);
+assert_eq!(counter.0, 100);
+```
+
 ## TODO
 
 - [x] `handler!(Eff1(x) | Eff2(x) => todo!())`
   - [x] Expand root `continue` to `ControlFlow::Continue`
   - [x] Effectful handlers (`transform`)
-- [ ] `#[group]` on trait definition
-- [ ] `#[group_handler]` on trait implementation
-  - [ ] Effectful group handlers
+- [x] `#[group]` on trait definition
+- [x] `#[group_handler]` on trait implementation
+  - [x] Effectful group handlers
 - [ ] `catch!(expr.await { Eff1(x) => todo!() })` (In-place catch)

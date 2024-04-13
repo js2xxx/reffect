@@ -161,7 +161,7 @@ impl Visit<'_> for HandlerPat {
     }
 }
 
-struct Handler {
+pub struct Handler {
     hargs: HandlerPat,
     guard: Option<Box<Expr>>,
     expr: Box<Expr>,
@@ -204,8 +204,20 @@ impl Parse for Handler {
     }
 }
 
-struct DesugarHandlerExpr<'a> {
-    root_label: &'a Option<Lifetime>,
+impl Handler {
+    pub fn heffect_list(this: &[Self]) -> syn::Type {
+        crate::expr::expand_effect(this.iter().flat_map(|h| {
+            if !h.hargs.is_non_exhaustive {
+                &*h.hargs.heffects
+            } else {
+                &[]
+            }
+        }))
+    }
+}
+
+pub struct DesugarHandlerExpr<'a> {
+    pub root_label: &'a Option<Lifetime>,
 }
 
 impl VisitMut for DesugarHandlerExpr<'_> {
@@ -286,32 +298,14 @@ impl Parse for Handlers {
     }
 }
 
-pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
-    let Handlers {
-        hargs,
-        ref args,
-        attrs,
-        ref root_label,
-        mut handlers,
-    } = handlers;
-    let HandlerArgs { is_move } = hargs;
-    let base_ident = Ident::new("__effect_list", Span::call_site());
-
-    if let Some(err) = (handlers.iter().enumerate())
-        .flat_map(|(index, a)| handlers.iter().take(index).map(move |b| (a, b)))
-        .find_map(|(a, b)| a.hargs.check_ty_with_other(&b.hargs))
-    {
-        return err.to_compile_error();
-    }
-
-    let heffect_list = crate::expr::expand_effect(handlers.iter().flat_map(|h| {
-        if !h.hargs.is_non_exhaustive {
-            &*h.hargs.heffects
-        } else {
-            &[]
-        }
-    }));
-
+pub fn expand_handler_body(
+    attrs: &[syn::Attribute],
+    handlers: &mut [Handler],
+    root_label: &Option<Lifetime>,
+    base_ident: &Ident,
+    heffect_list: &syn::Type,
+    args: &Option<crate::Args>,
+) -> proc_macro2::TokenStream {
     let effect_list;
     let mut desugar = match args {
         Some(args) => {
@@ -380,11 +374,41 @@ pub fn expand_handler(handlers: Handlers) -> proc_macro2::TokenStream {
         })
     });
 
-    let body = quote! {{
+    quote! {{
         #(#attrs)*
         #(#branches)*
         #base_ident.unreachable()
-    }};
+    }}
+}
+
+pub fn expand_handlers(handlers: Handlers) -> proc_macro2::TokenStream {
+    let Handlers {
+        hargs,
+        ref args,
+        attrs,
+        ref root_label,
+        mut handlers,
+    } = handlers;
+    let HandlerArgs { is_move } = hargs;
+    let base_ident = Ident::new("__effect_list", Span::call_site());
+
+    if let Some(err) = (handlers.iter().enumerate())
+        .flat_map(|(index, a)| handlers.iter().take(index).map(move |b| (a, b)))
+        .find_map(|(a, b)| a.hargs.check_ty_with_other(&b.hargs))
+    {
+        return err.to_compile_error();
+    }
+
+    let heffect_list = Handler::heffect_list(&handlers);
+
+    let body = expand_handler_body(
+        &attrs,
+        &mut handlers,
+        root_label,
+        &base_ident,
+        &heffect_list,
+        args,
+    );
 
     let body = match args {
         Some(args) => {
