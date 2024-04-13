@@ -104,7 +104,7 @@ let coro = effectful_block! {
 let coro = coro.catch0(CounterAmplifier(10));
 
 let mut counter = CounterImpl(0);
-let coro = coro.catch(&mut counter);
+let coro = coro.catch1(&mut counter);
 
 assert_eq!(coro.run(), 10);
 assert_eq!(counter.0, 100);
