@@ -5,7 +5,7 @@
 ### Standalone effects
 
 ```rust
-#![feature(coroutines)]
+#![feature(coroutines, coroutine_trait)]
 
 use reffect::*;
 
@@ -38,13 +38,21 @@ fn test_func() -> u32 {
     value
 }
 
+// Catch within effectful coroutines.
 let ret = test_func().handle(handler! {
     Log(s) => println!("{s}"),
     Increment(i) if i < 10 => i + 1,
     Increment(i) => break i,
 });
-
 assert_eq!(ret.run(), 2);
+
+// Catch in place.
+let ret = catch!(test_func().await {
+    Log(s) => println!("{s}"),
+    Increment(i) if i < 10 => i + 1,
+    Increment(i) => break i,
+});
+assert_eq!(ret, 2);
 
 ```
 
@@ -118,4 +126,4 @@ assert_eq!(counter.0, 100);
 - [x] `#[group]` on trait definition
 - [x] `#[group_handler]` on trait implementation
   - [x] Effectful group handlers
-- [ ] `catch!(expr.await { Eff1(x) => todo!() })` (In-place catch)
+- [x] `catch!(expr.await { Eff1(x) => todo!() })` (In-place catch)
