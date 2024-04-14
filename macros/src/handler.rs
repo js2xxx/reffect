@@ -217,16 +217,22 @@ impl Handler {
 }
 
 pub struct DesugarHandlerExpr<'a> {
-    pub root_label: &'a Option<Lifetime>,
+    pub root_label: &'a Lifetime,
 }
 
 impl VisitMut for DesugarHandlerExpr<'_> {
     fn visit_expr_mut(&mut self, i: &mut syn::Expr) {
         match i {
             Expr::Break(syn::ExprBreak { label, expr, .. })
-                if label == self.root_label || label.is_none() =>
+                if label.as_ref() == Some(self.root_label) || label.is_none() =>
             {
                 *i = parse_quote!(return core::ops::ControlFlow::Break(#expr));
+            }
+
+            Expr::Return(syn::ExprReturn { expr, .. }) => {
+                let root_label = self.root_label;
+                let e = expr.take();
+                *i = parse_quote!(break #root_label #e);
             }
 
             Expr::Async(_)
@@ -318,6 +324,15 @@ pub fn expand_handler_body(
         None => None,
     };
 
+    let slot;
+    let root_label = match root_label {
+        Some(label) => label,
+        None => {
+            slot = parse_quote!('__root_label);
+            &slot
+        }
+    };
+
     let branches = handlers.iter_mut().flat_map(|handler| {
         let Handler { hargs, guard, expr } = handler;
         let HandlerPat {
@@ -337,7 +352,7 @@ pub fn expand_handler_body(
         iter.map(|((effect, pat), (guard, expr))| {
             let success = quote! {{
                 #[warn(unreachable_code, clippy::diverging_sub_expression)]
-                let ret = #expr;
+                let ret = #root_label: { #expr };
                 let tagged = <#effect as reffect::EffectExt>::tag(ret);
                 let sum = reffect::util::Sum::<
                     <#heffect_list as reffect::effect::EffectList>::ResumeList,
@@ -377,6 +392,7 @@ pub fn expand_handler_body(
     quote! {{
         #(#attrs)*
         #(#branches)*
+        let #base_ident: reffect::util::Sum<()> = #base_ident;
         #base_ident.unreachable()
     }}
 }

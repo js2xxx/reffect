@@ -161,8 +161,9 @@ fn expand_group_effect_impl(
     let output_ty: Box<Type> =
         Box::new(parse_quote!(core::ops::ControlFlow<#break_ty, #output_ty>));
 
-    crate::handler::DesugarHandlerExpr { root_label: &None }.visit_block_mut(&mut block);
-    let block: syn::Block = parse_quote!({ core::ops::ControlFlow::Continue(#block) });
+    let root_label = parse_quote!('__root_label);
+    crate::handler::DesugarHandlerExpr { root_label: &root_label }.visit_block_mut(&mut block);
+    let block: syn::Block = parse_quote!({ core::ops::ControlFlow::Continue(#root_label: #block) });
     sig.output = parse_quote!(-> #output_ty);
 
     let mut func: syn::ItemFn = parse_quote! {
