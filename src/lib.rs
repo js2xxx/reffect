@@ -19,7 +19,8 @@ pub mod util;
 extern crate std;
 
 pub use reffect_macros::{
-    do_await, do_yield, effectful, effectful_block, group, group_handler, handler, EffectList,
+    catch, do_await, do_yield, effectful, effectful_block, group, group_handler, handler,
+    EffectList,
 };
 
 pub use self::{

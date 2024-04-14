@@ -176,12 +176,12 @@ mod test {
             Eff2(c) => char::try_from(yield Eff3(c.to_string())).unwrap_or('d')
         });
 
-        let coro = coro.handle(handler! {
+        let ret = crate::catch!(static coro.await {
             Eff3(y) if y == "true" => 1,
             Eff3(_) => break 100,
         });
 
-        assert_eq!(coro.run(), 2);
+        assert_eq!(ret, 2);
     }
 
     #[crate::group]

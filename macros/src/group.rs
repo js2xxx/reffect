@@ -366,6 +366,7 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
         &base_ident,
         &heffect_list,
         &args,
+        true,
     );
 
     let mut impl_effectless_handler = None;

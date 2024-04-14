@@ -226,7 +226,7 @@ impl VisitMut for DesugarHandlerExpr<'_> {
             Expr::Break(syn::ExprBreak { label, expr, .. })
                 if label.as_ref() == Some(self.root_label) || label.is_none() =>
             {
-                *i = parse_quote!(return core::ops::ControlFlow::Break(#expr));
+                *i = parse_quote!(break '__effectful_handler_body core::ops::ControlFlow::Break(#expr));
             }
 
             Expr::Return(syn::ExprReturn { expr, .. }) => {
@@ -311,6 +311,7 @@ pub fn expand_handler_body(
     base_ident: &Ident,
     heffect_list: &syn::Type,
     args: &Option<crate::Args>,
+    unreachable_rest: bool,
 ) -> proc_macro2::TokenStream {
     let effect_list;
     let mut desugar = match args {
@@ -357,7 +358,7 @@ pub fn expand_handler_body(
                 let sum = reffect::util::Sum::<
                     <#heffect_list as reffect::effect::EffectList>::ResumeList,
                 >::new(tagged);
-                return core::ops::ControlFlow::Continue(sum);
+                break '__effectful_handler_body core::ops::ControlFlow::Continue(sum);
             }};
             match guard {
                 Some(guard) => quote! {
@@ -389,11 +390,19 @@ pub fn expand_handler_body(
         })
     });
 
-    quote! {{
+    let rest = if unreachable_rest {
+        quote! {
+            let #base_ident: reffect::util::Sum<()> = #base_ident;
+            #base_ident.unreachable()
+        }
+    } else {
+        quote!(#base_ident)
+    };
+
+    quote! {'__effectful_handler_body: {
         #(#attrs)*
         #(#branches)*
-        let #base_ident: reffect::util::Sum<()> = #base_ident;
-        #base_ident.unreachable()
+        #rest
     }}
 }
 
@@ -424,6 +433,7 @@ pub fn expand_handlers(handlers: Handlers) -> proc_macro2::TokenStream {
         &base_ident,
         &heffect_list,
         args,
+        true,
     );
 
     let body = match args {

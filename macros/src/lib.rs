@@ -165,6 +165,12 @@ pub fn group_handler(
 }
 
 #[proc_macro]
+pub fn catch(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let catch = parse_macro_input!(input as crate::expr::Catch);
+    crate::expr::expand_catch(catch).into()
+}
+
+#[proc_macro]
 pub fn do_await(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let expr = parse_macro_input!(input as syn::Expr);
     let expand_await = crate::expr::expand_await(Span::call_site(), &expr, false, None);
