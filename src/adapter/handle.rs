@@ -48,12 +48,11 @@ where
     Coro: Effectful<Y>,
     H: Handler<Coro::Return, E, HM>,
 
-    Y: EffectList,
+    Y: EffectList + ContainsList<E, UL, RemUL>,
     E: EffectList,
 
     NarrowRem<Y, E, UL>: EffectList<ResumeList = NarrowRem<Y::ResumeList, E::ResumeList, UL>>,
 
-    Y: ContainsList<E, UL, RemUL>,
     Y::ResumeList: ContainsList<E::ResumeList, UL, RemUL>,
     (Begin, Y::ResumeList): SplitList<Y::ResumeList, Y::Tags<U1>>,
 {

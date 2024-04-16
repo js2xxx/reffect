@@ -1,6 +1,6 @@
 mod derive;
-pub(crate) mod range;
-pub(crate) mod repr;
+pub mod range;
+pub mod repr;
 
 use core::{
     fmt,
@@ -78,6 +78,14 @@ impl<S: repr::SumList> Sum<S> {
         }
     }
 
+    pub fn new_marked<T, U>(value: T, _: PhantomData<S>) -> Self
+    where
+        S: repr::Split<T, U>,
+        U: Tag,
+    {
+        Self::new(value)
+    }
+
     pub fn type_marker(&self) -> PhantomData<S> {
         PhantomData
     }
@@ -87,11 +95,7 @@ impl<S: repr::SumList> Sum<S> {
         S: repr::Split<T, U>,
         U: Tag,
     {
-        if self.tag == U::VALUE {
-            Some(unsafe { &*S::as_ptr(&self.data) })
-        } else {
-            None
-        }
+        (self.tag == U::VALUE).then(|| unsafe { &*S::as_ptr(&self.data) })
     }
 
     pub fn get_mut<T, U>(&mut self) -> Option<&mut T>
@@ -99,15 +103,12 @@ impl<S: repr::SumList> Sum<S> {
         S: repr::Split<T, U>,
         U: Tag,
     {
-        if self.tag == U::VALUE {
-            Some(unsafe { &mut *S::as_mut_ptr(&mut self.data) })
-        } else {
-            None
-        }
+        (self.tag == U::VALUE).then(|| unsafe { &mut *S::as_mut_ptr(&mut self.data) })
     }
 }
 
 pub type Rem<S, T, U> = <S as repr::Split<T, U>>::Remainder;
+pub type RemTags<S, T, U> = <S as repr::Split<T, U>>::RemainderTags;
 pub type Substitute<S, T, T2, U> = <S as repr::Split<T, U>>::Substitute<T2>;
 
 impl<S: repr::SumList> Sum<S> {

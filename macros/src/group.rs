@@ -6,7 +6,7 @@ use syn::{
     ItemTrait, Signature, TraitItemFn, Type, TypePath,
 };
 
-use crate::Args;
+use crate::{Args, Effect};
 
 fn expand_group_effect_ty(
     group_ident: &Ident,
@@ -65,7 +65,7 @@ fn expand_group_effect(
     group_ident: &Ident,
     vis: &syn::Visibility,
     item: TraitItemFn,
-    effects: &mut (Vec<Type>, Vec<TokenStream>),
+    effects: &mut (Vec<Effect>, Vec<TokenStream>),
 ) -> syn::Result<TokenStream> {
     let TraitItemFn { attrs, sig, default, .. } = item;
 
@@ -102,7 +102,7 @@ fn expand_group_effect(
         #vis #sig { yield #ty { #(#call_args,)* } }
     };
 
-    effects.extend([(ty, definition)]);
+    effects.extend([(Effect::Group(ty), definition)]);
     Ok(func)
 }
 
@@ -112,7 +112,7 @@ fn expand_group_effect_impl(
     group_ident: &Ident,
     item: syn::ImplItemFn,
     break_ty: Option<&Type>,
-    effects: &mut (Vec<Type>, Vec<crate::handler::Handler>),
+    effects: &mut (Vec<Effect>, Vec<crate::handler::Handler>),
 ) -> syn::Result<TokenStream> {
     let syn::ImplItemFn {
         attrs,
@@ -200,7 +200,7 @@ fn expand_group_effect_impl(
         #ty { #(#call_args,)* } => #expr?,
     };
 
-    effects.extend([(ty, arm)]);
+    effects.extend([(Effect::Group(ty), arm)]);
     Ok(func.to_token_stream())
 }
 
@@ -251,7 +251,11 @@ pub fn expand_group(item: ItemTrait) -> syn::Result<TokenStream> {
 
     let super_effect_groups = supertraits
         .iter()
-        .map(|st| syn::parse2::<TypePath>(st.to_token_stream()).map(Type::Path))
+        .map(|st| {
+            syn::parse2::<TypePath>(st.to_token_stream())
+                .map(Type::Path)
+                .map(Effect::Group)
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
     let effect_list = crate::expr::expand_effect(effect_ty.iter().chain(&super_effect_groups));
@@ -331,7 +335,11 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
     let items = iter.collect::<Result<Vec<_>, _>>()?;
     let (effect_ty, mut handlers) = effects;
 
-    let heffect_list = crate::expr::expand_effect(&effect_ty);
+    let heffect_list = crate::expr::expand_effect(effect_ty);
+    let marker = quote!(core::marker::PhantomData::<
+        <#heffect_list as reffect::effect::EffectList>::ResumeList
+    >);
+
     let effect_list = match &args {
         Some(args) => crate::expr::expand_effect(&args.effects),
         None => parse_quote!(()),
@@ -364,7 +372,7 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
         &mut handlers,
         &None,
         &base_ident,
-        &heffect_list,
+        &marker,
         &args,
         true,
     );

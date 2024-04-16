@@ -50,8 +50,10 @@ where
 pub trait SplitList<TList: SumList, UList>: SumList {
     type Remainder: SumList;
 
+    #[doc(hidden)]
     fn broaden_tag(tag: u8) -> u8;
 
+    #[doc(hidden)]
     fn narrow_tag(tag: u8) -> Result<u8, u8>;
 }
 

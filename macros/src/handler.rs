@@ -1,7 +1,7 @@
 use std::iter;
 
 use convert_case::{Case, Casing};
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens};
 use syn::{
     parse::Parse,
@@ -206,13 +206,14 @@ impl Parse for Handler {
 
 impl Handler {
     pub fn heffect_list(this: &[Self]) -> syn::Type {
-        crate::expr::expand_effect(this.iter().flat_map(|h| {
+        let effects = this.iter().flat_map(|h| {
             if !h.hargs.is_non_exhaustive {
                 &*h.hargs.heffects
             } else {
                 &[]
             }
-        }))
+        });
+        crate::expr::expand_effect(effects.map(|ty| crate::Effect::Group(ty.clone())))
     }
 }
 
@@ -309,11 +310,11 @@ pub fn expand_handler_body(
     handlers: &mut [Handler],
     root_label: &Option<Lifetime>,
     base_ident: &Ident,
-    heffect_list: &syn::Type,
+    continue_marker: &TokenStream,
     args: &Option<crate::Args>,
     unreachable_rest: bool,
-) -> proc_macro2::TokenStream {
-    let effect_list;
+) -> TokenStream {
+    let mut effect_list = parse_quote!(_);
     let mut desugar = match args {
         Some(args) => {
             effect_list = crate::expr::expand_effect(&args.effects);
@@ -355,9 +356,7 @@ pub fn expand_handler_body(
                 #[warn(unreachable_code, clippy::diverging_sub_expression)]
                 let ret = #root_label: { #expr };
                 let tagged = <#effect as reffect::EffectExt>::tag(ret);
-                let sum = reffect::util::Sum::<
-                    <#heffect_list as reffect::effect::EffectList>::ResumeList,
-                >::new(tagged);
+                let sum = reffect::util::Sum::new_marked(tagged, #continue_marker);
                 break '__effectful_handler_body core::ops::ControlFlow::Continue(sum);
             }};
             match guard {
@@ -396,7 +395,13 @@ pub fn expand_handler_body(
             #base_ident.unreachable()
         }
     } else {
-        quote!(#base_ident)
+        quote! {
+            let _eff_marker = #base_ident.type_marker();
+            core::ops::ControlFlow::Continue(reffect::util::narrow_effect_prefixed(
+                yield #base_ident.broaden::<#effect_list, _>(),
+                _eff_marker,
+            ).broaden())
+        }
     };
 
     quote! {'__effectful_handler_body: {
@@ -406,7 +411,7 @@ pub fn expand_handler_body(
     }}
 }
 
-pub fn expand_handlers(handlers: Handlers) -> proc_macro2::TokenStream {
+pub fn expand_handlers(handlers: Handlers) -> TokenStream {
     let Handlers {
         hargs,
         ref args,
@@ -425,13 +430,16 @@ pub fn expand_handlers(handlers: Handlers) -> proc_macro2::TokenStream {
     }
 
     let heffect_list = Handler::heffect_list(&handlers);
+    let marker = quote!(core::marker::PhantomData::<
+        <#heffect_list as reffect::effect::EffectList>::ResumeList
+    >);
 
     let body = expand_handler_body(
         &attrs,
         &mut handlers,
         root_label,
         &base_ident,
-        &heffect_list,
+        &marker,
         args,
         true,
     );

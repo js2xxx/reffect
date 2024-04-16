@@ -6,7 +6,11 @@ use core::{
 
 use crate::{
     adapter::Begin,
-    util::{sum_type::repr::SumList, Sum},
+    util::{
+        sum_type::{range::SplitList, repr::SumList},
+        tag::UTerm,
+        Sum,
+    },
 };
 
 pub trait Effect {
@@ -33,8 +37,9 @@ impl<E: Effect> EffectGroup for E {
     type Effects = (E, ());
 }
 
-pub trait EffectList: SumList {
-    type ResumeList: SumList;
+pub trait EffectList: Sized + SumList + SplitList<Self, <Self as SumList>::Tags<UTerm>> {
+    type ResumeList: SumList
+        + SplitList<Self::ResumeList, <Self::ResumeList as SumList>::Tags<UTerm>>;
 }
 
 impl EffectList for () {
@@ -43,8 +48,12 @@ impl EffectList for () {
 
 impl<T: Effect, U: EffectList> EffectList for (T, U)
 where
-    (T, U): SumList,
-    (ResumeTy<T>, U::ResumeList): SumList,
+    (T, U): SumList + SplitList<(T, U), <(T, U) as SumList>::Tags<UTerm>>,
+    (ResumeTy<T>, U::ResumeList): SumList
+        + SplitList<
+            (ResumeTy<T>, U::ResumeList),
+            <(ResumeTy<T>, U::ResumeList) as SumList>::Tags<UTerm>,
+        >,
 {
     type ResumeList = (ResumeTy<T>, U::ResumeList);
 }

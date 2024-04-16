@@ -19,6 +19,10 @@ pub fn type_name_of_marker<T: ?Sized>(_: PhantomData<T>) -> &'static str {
     type_name::<T>()
 }
 
+pub fn resume_marker<E: EffectList>(_: PhantomData<E>) -> PhantomData<(Begin, E::ResumeList)> {
+    PhantomData
+}
+
 pub fn untag_effect<T: Effect>(r: Sum<(ResumeTy<T>, ())>, _: PhantomData<(T, ())>) -> T::Resume {
     Sum::into_inner(r).untag()
 }

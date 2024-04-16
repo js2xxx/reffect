@@ -13,40 +13,37 @@ fn concat_list<P>(effects: impl IntoIterator<Item = P>) -> Type
 where
     P: Borrow<Type>,
 {
-    effects.into_iter().fold(parse_quote!(()), |acc, path| {
-        let path = path.borrow();
+    let opt = effects.into_iter().map(|path| path.borrow().clone()).reduce(|left, right| {
         let concat_list: Type = parse_quote! {
-            reffect::util::ConcatList<#path>
+            reffect::util::ConcatList<#right>
         };
         parse_quote! {
-            <#acc as #concat_list>::Output
+            <#left as #concat_list>::Output
         }
-    })
+    });
+    opt.unwrap_or_else(|| parse_quote!(()))
 }
 
 pub(crate) fn expand_effect<P>(effects: impl IntoIterator<Item = P>) -> Type
 where
-    P: Borrow<Type>,
+    P: Borrow<crate::Effect>,
 {
     let list = effects.into_iter().map(|path| {
         let path = path.borrow();
-        let path: Type = parse_quote! { <#path as reffect::effect::EffectGroup>::Effects };
-        path
+        path.to_list()
     });
     concat_list(list)
 }
 
 pub(crate) fn expand_resume<P>(effects: impl IntoIterator<Item = P>) -> Type
 where
-    P: Borrow<Type>,
+    P: Borrow<crate::Effect>,
 {
     let resume_ty = effects.into_iter().map(|path| {
         let path = path.borrow();
+        let list = path.to_list();
         let path: Type = parse_quote! {
-            <
-                <#path as reffect::effect::EffectGroup>::Effects
-                    as reffect::effect::EffectList
-            >::ResumeList
+            <#list as reffect::effect::EffectList>::ResumeList
         };
         path
     });
@@ -121,14 +118,13 @@ fn expand_catch_expr(
 
     let base_ident = Ident::new("__effect_list", Span::call_site());
 
-    let heffect_list = Handler::heffect_list(handlers);
     let handler_body = if !handlers.is_empty() {
         crate::handler::expand_handler_body(
             attrs,
             handlers,
             &None,
             &base_ident,
-            &heffect_list,
+            &quote!(reffect::util::resume_marker(_eff_marker)),
             &None,
             !yield_rest,
         )
@@ -136,7 +132,7 @@ fn expand_catch_expr(
         quote!(core::ops::ControlFlow::Continue(reffect::util::narrow_effect_prefixed(
             yield #base_ident.broaden::<#effect_list, _>(),
             _eff_marker,
-        )))
+        ).broaden()))
     };
 
     parse_quote! {
@@ -164,7 +160,7 @@ fn expand_catch_expr(
                     let _eff_marker = #base_ident.type_marker();
 
                     state = match #handler_body {
-                        core::ops::ControlFlow::Continue(state) => state.broaden(),
+                        core::ops::ControlFlow::Continue(state) => state,
                         core::ops::ControlFlow::Break(ret) => break ret,
                     };
                 }

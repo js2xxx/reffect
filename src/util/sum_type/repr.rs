@@ -1,7 +1,7 @@
 use core::{convert::Infallible, mem::ManuallyDrop, ptr};
 
 use super::range::Count;
-use crate::util::tag::{Tag, UInt, UTerm};
+use crate::util::tag::{Tag, UInt, UTerm, U1};
 
 pub struct Nil(pub(super) Infallible);
 
@@ -15,6 +15,7 @@ pub trait SumList: Count {
     type Repr;
     type Tags<U>;
 
+    #[doc(hidden)]
     unsafe fn drop(this: &mut ManuallyDrop<Self::Repr>, tag: u8);
 }
 
@@ -42,19 +43,26 @@ where
 }
 
 pub trait Split<T, U: Tag>: SumList {
+    #[doc(hidden)]
     fn from_data(data: T) -> Self::Repr;
 
+    #[doc(hidden)]
     unsafe fn into_data_unchecked(this: Self::Repr) -> T;
 
+    #[doc(hidden)]
     fn as_ptr(this: &Self::Repr) -> *const T;
 
+    #[doc(hidden)]
     fn as_mut_ptr(this: &mut Self::Repr) -> *mut T;
 
     type Remainder: SumList;
+    type RemainderTags;
     type Substitute<T2>: Split<T2, U>;
 
+    #[doc(hidden)]
     fn from_remainder(tag: u8) -> u8;
 
+    #[doc(hidden)]
     fn try_unwrap(tag: u8) -> Result<(), u8>;
 }
 
@@ -83,6 +91,7 @@ where
     }
 
     type Remainder = Tail;
+    type RemainderTags = Tail::Tags<U1>;
     type Substitute<T2> = (T2, Tail);
 
     fn from_remainder(tag: u8) -> u8 {
@@ -124,6 +133,7 @@ where
     }
 
     type Remainder = (Head, <Tail as Split<T, U>>::Remainder);
+    type RemainderTags = (UTerm, <Tail as Split<T, U>>::RemainderTags);
     type Substitute<T2> = (Head, Tail::Substitute<T2>);
 
     fn from_remainder(tag: u8) -> u8 {

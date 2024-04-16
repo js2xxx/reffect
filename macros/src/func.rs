@@ -15,7 +15,7 @@ pub fn expand_func(args: &mut Args, mut item: ItemFn) -> syn::Result<ItemFn> {
         ));
     }
 
-    let async_eff = parse_quote!(reffect::future::Async);
+    let async_eff = crate::Effect::Group(parse_quote!(reffect::future::Async));
     if item.sig.asyncness.take().is_some() && effects.iter().all(|e| *e != async_eff) {
         effects.insert(0, async_eff);
     }

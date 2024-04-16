@@ -12,11 +12,39 @@ use proc_macro2::Span;
 use quote::ToTokens;
 use syn::{parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Token};
 
+#[derive(Clone, PartialEq, Eq)]
+enum Effect {
+    Group(syn::Type),
+    List(syn::Type),
+}
+
+impl Parse for Effect {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        if input.peek(Token![...]) {
+            let _: Token![...] = input.parse()?;
+            let ty = input.parse()?;
+            Ok(Effect::List(ty))
+        } else {
+            let ty = input.parse()?;
+            Ok(Effect::Group(ty))
+        }
+    }
+}
+
+impl Effect {
+    fn to_list(&self) -> syn::Type {
+        match self {
+            Effect::Group(g) => syn::parse_quote!(<#g as reffect::effect::EffectGroup>::Effects),
+            Effect::List(l) => l.clone(),
+        }
+    }
+}
+
 #[derive(Default, Clone)]
 struct Args {
     is_static: Option<Token![static]>,
     is_move: Option<Token![move]>,
-    effects: Punctuated<syn::Type, Token![,]>,
+    effects: Punctuated<Effect, Token![,]>,
 }
 
 impl Parse for Args {
@@ -34,7 +62,7 @@ impl Parse for Args {
         if is_static.is_some() || is_move.is_some() {
             input.parse::<Token![;]>()?;
         }
-        let effects = input.parse_terminated(syn::Type::parse, Token![,])?;
+        let effects = input.parse_terminated(Effect::parse, Token![,])?;
         Ok(Args { is_static, is_move, effects })
     }
 }
@@ -97,7 +125,7 @@ where
 #[proc_macro]
 #[allow(non_snake_case)]
 pub fn EffectList(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    match syn::parse::Parser::parse(parse_terminated::<syn::Type, Token![,]>, input) {
+    match syn::parse::Parser::parse(parse_terminated::<Effect, Token![,]>, input) {
         Ok(effects) => {
             let expand_effect = crate::expr::expand_effect(effects);
             expand_effect.into_token_stream().into()
