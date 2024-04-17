@@ -34,7 +34,7 @@ pub fn run<Coro: Effectful>(coro: Coro) -> Coro::Return {
 pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
     fn run(self) -> <Self as Coroutine<Sum<(Begin, ())>>>::Return
     where
-        Self: Effectful + Coroutine<Sum<(Begin, ())>>,
+        Self: Effectful,
     {
         run(self)
     }
