@@ -9,7 +9,7 @@ use std::{
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
-    ptr::NonNull,
+    ptr::NonNull, sync::atomic,
 };
 
 use reffect::{
@@ -29,6 +29,7 @@ struct Gc<T: ?Sized>(*mut T);
 impl<T: ?Sized> Drop for Gc<T> {
     fn drop(&mut self) {
         self.0 = self.0.with_addr(0);
+        atomic::compiler_fence(atomic::Ordering::Release);
         println!("dropping reference of {self:p}");
     }
 }
@@ -240,6 +241,8 @@ fn main() {
         *obj2 + *obj3
     };
 
-    let mut c = SimpleCollector::new(8);
+    // We limit the heap to be able to contain only 2 integers, whereas the block
+    // allocates 3 integer objects to force the mark-sweeping process.
+    let mut c = SimpleCollector::new(2 * mem::size_of::<i32>());
     assert_eq!(f.collect(&mut c).run(), 67891);
 }
