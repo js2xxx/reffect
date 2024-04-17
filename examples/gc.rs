@@ -6,7 +6,7 @@
 use std::{
     alloc::Layout,
     collections::HashMap,
-    mem,
+    mem::{self, ManuallyDrop},
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     ptr::NonNull, sync::atomic,
@@ -24,9 +24,21 @@ use reffect::{
 };
 
 #[repr(transparent)]
-struct Gc<T: ?Sized>(*mut T);
+struct Gc<T: ?Sized, const UNIQUE: bool = false>(*mut T);
 
-impl<T: ?Sized> Drop for Gc<T> {
+impl<T: ?Sized> Clone for Gc<T> {
+    fn clone(&self) -> Self {
+        Gc(self.0)
+    }
+}
+
+impl <T: ?Sized, const UNIQUE: bool> Gc<T, UNIQUE> {
+    fn into_shared(self) -> Gc<T> {
+        Gc(ManuallyDrop::new(self).0)
+    }
+}
+
+impl<T: ?Sized, const UNIQUE: bool> Drop for Gc<T, UNIQUE> {
     fn drop(&mut self) {
         self.0 = self.0.with_addr(0);
         atomic::compiler_fence(atomic::Ordering::Release);
@@ -34,7 +46,7 @@ impl<T: ?Sized> Drop for Gc<T> {
     }
 }
 
-impl<T> Deref for Gc<T> {
+impl<T, const UNIQUE: bool> Deref for Gc<T, UNIQUE> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -42,7 +54,7 @@ impl<T> Deref for Gc<T> {
     }
 }
 
-impl<T> DerefMut for Gc<T> {
+impl<T> DerefMut for Gc<T, true> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.0 }
     }
@@ -60,7 +72,7 @@ impl Effect for Alloc {
 }
 
 #[effectful(Alloc)]
-fn gc<T>(t: T) -> Gc<T> {
+fn gc<T>(t: T) -> Gc<T, true> {
     unsafe fn drop_ptr<T>(ptr: NonNull<()>) {
         unsafe { core::ptr::drop_in_place(ptr.as_ptr().cast::<T>()) }
     }
@@ -74,6 +86,11 @@ fn gc<T>(t: T) -> Gc<T> {
     unsafe { ptr.as_ptr().write(t) };
 
     Gc(ptr.as_ptr())
+}
+
+#[effectful(Alloc)]
+fn gc_shared<T>(t: T) -> Gc<T> {
+    gc(t).await.into_shared()
 }
 
 /// # Safety
@@ -230,8 +247,10 @@ fn main() {
         #![effectful(Alloc)]
 
         let obj2 = {
-            let obj1 = gc(1000).await;
+            let obj1: Gc<i32> = gc_shared(1000).await;
             println!("obj1 is at {:p}", &obj1);
+            let obj1_clone = obj1.clone();
+            println!("obj1_clone is at {:p}", &obj1_clone);
             let obj2 = gc(67890).await;
             println!("obj2 is at {:p}", &obj2);
             obj2
