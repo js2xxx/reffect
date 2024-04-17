@@ -72,7 +72,7 @@ impl Effect for Alloc {
 }
 
 #[effectful(Alloc)]
-fn gc<T>(t: T) -> Gc<T, true> {
+fn gc_unique<T>(t: T) -> Gc<T, true> {
     unsafe fn drop_ptr<T>(ptr: NonNull<()>) {
         unsafe { core::ptr::drop_in_place(ptr.as_ptr().cast::<T>()) }
     }
@@ -89,8 +89,8 @@ fn gc<T>(t: T) -> Gc<T, true> {
 }
 
 #[effectful(Alloc)]
-fn gc_shared<T>(t: T) -> Gc<T> {
-    gc(t).await.into_shared()
+fn gc<T>(t: T) -> Gc<T> {
+    gc_unique(t).await.into_shared()
 }
 
 /// # Safety
@@ -247,15 +247,15 @@ fn main() {
         #![effectful(Alloc)]
 
         let obj2 = {
-            let obj1: Gc<i32> = gc_shared(1000).await;
+            let obj1: Gc<i32> = gc(1000).await;
             println!("obj1 is at {:p}", &obj1);
             let obj1_clone = obj1.clone();
             println!("obj1_clone is at {:p}", &obj1_clone);
-            let obj2 = gc(67890).await;
+            let obj2 = gc_unique(67890).await;
             println!("obj2 is at {:p}", &obj2);
             obj2
         };
-        let obj3 = gc(1).await;
+        let obj3 = gc_unique(1).await;
         println!("obj3 is at {:p}", &obj3);
         *obj2 + *obj3
     };
