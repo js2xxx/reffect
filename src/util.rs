@@ -3,7 +3,7 @@ pub mod tag;
 
 use core::{any::type_name, marker::PhantomData};
 
-pub use self::sum_type::{range::ConcatList, umap, Sum};
+pub use self::sum_type::{range::ConcatList, Sum};
 use self::sum_type::{range::SplitList, repr::SumList};
 use crate::{
     adapter::Begin,

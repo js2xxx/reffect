@@ -9,7 +9,8 @@ use std::{
     mem::{self, ManuallyDrop},
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
-    ptr::NonNull, sync::atomic,
+    ptr::NonNull,
+    sync::atomic,
 };
 
 use reffect::{
@@ -32,7 +33,7 @@ impl<T: ?Sized> Clone for Gc<T> {
     }
 }
 
-impl <T: ?Sized, const UNIQUE: bool> Gc<T, UNIQUE> {
+impl<T: ?Sized, const UNIQUE: bool> Gc<T, UNIQUE> {
     fn into_shared(self) -> Gc<T> {
         Gc(ManuallyDrop::new(self).0)
     }

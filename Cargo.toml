@@ -7,7 +7,6 @@ version = "0.1.0"
 reffect-macros = {path = "macros"}
 
 pin-project = "1.1"
-tuple_list = "0.1"
 
 [workspace]
 members = ["macros"]

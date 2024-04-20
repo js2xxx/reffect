@@ -11,8 +11,6 @@ use core::{
     ptr,
 };
 
-pub use tuple_list::tuple_list_type as umap;
-
 use super::tag::{Tag, UTerm};
 
 pub type Repr<S> = <S as repr::SumList>::Repr;
@@ -299,10 +297,10 @@ mod tests {
         sum = Sum::new("Hello World!".to_string());
         assert_eq!(sum.get(), Some(&"Hello World!".to_string()));
 
-        let sum: Sum<T2> = sum.broaden::<_, umap![U2, U1]>();
+        let sum: Sum<T2> = sum.broaden::<_, Sum![@FORWARD U2, U1,]>();
         assert_eq!(sum.get(), Some(&"Hello World!".to_string()));
 
-        let sum: Sum<T1> = sum.narrow::<_, umap![U0, U0]>().unwrap();
+        let sum: Sum<T1> = sum.narrow::<_, Sum![@FORWARD U0, U0,]>().unwrap();
         let sum: Sum<(String, ())> = sum.narrow::<T0, _>().unwrap_err();
         assert_eq!(*sum, "Hello World!");
     }

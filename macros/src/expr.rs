@@ -13,14 +13,17 @@ fn concat_list<P>(effects: impl IntoIterator<Item = P>) -> Type
 where
     P: Borrow<Type>,
 {
-    let opt = effects.into_iter().map(|path| path.borrow().clone()).reduce(|left, right| {
-        let concat_list: Type = parse_quote! {
-            reffect::util::ConcatList<#right>
-        };
-        parse_quote! {
-            <#left as #concat_list>::Output
-        }
-    });
+    let opt = effects
+        .into_iter()
+        .map(|path| path.borrow().clone())
+        .reduce(|left, right| {
+            let concat_list: Type = parse_quote! {
+                reffect::util::ConcatList<#right>
+            };
+            parse_quote! {
+                <#left as #concat_list>::Output
+            }
+        });
     opt.unwrap_or_else(|| parse_quote!(()))
 }
 
