@@ -67,6 +67,36 @@ impl Sum![] {
 }
 
 impl<S: repr::SumList> Sum<S> {
+    pub fn type_id(&self) -> core::any::TypeId
+    where
+        S: derive::TypeMeta + 'static,
+    {
+        S::type_id(self.tag)
+    }
+
+    pub fn type_name(&self) -> &'static str
+    where
+        S: derive::TypeMeta,
+    {
+        S::type_name(self.tag)
+    }
+
+    pub fn as_any(&self) -> &dyn core::any::Any
+    where
+        S: derive::TypeMeta + 'static,
+    {
+        unsafe { S::as_any(&self.data, self.tag) }
+    }
+
+    pub fn as_any_mut(&mut self) -> &mut dyn core::any::Any
+    where
+        S: derive::TypeMeta + 'static,
+    {
+        unsafe { S::as_any_mut(&mut self.data, self.tag) }
+    }
+}
+
+impl<S: repr::SumList> Sum<S> {
     pub fn new<T, U>(value: T) -> Self
     where
         S: repr::Split<T, U>,
