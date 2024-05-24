@@ -63,6 +63,7 @@ pub fn expand_func(args: &mut Args, mut item: ItemFn) -> syn::Result<ItemFn> {
 
     *item.block = parse_quote! {
         {
+            #[coroutine]
             #is_static move |_: #resume_types| {
                 #move_args
                 #block

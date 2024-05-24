@@ -42,6 +42,7 @@ pub(crate) fn expand_block(block: EffectfulBlock) -> TokenStream {
     let resume_types = crate::expr::expand_resume(effects);
 
     quote! {
+        #[coroutine]
         #is_static #is_move |_: #resume_types| {
             #(#attrs)*
             #(#stmts)*

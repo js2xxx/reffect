@@ -381,7 +381,7 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
     let body = match args {
         Some(args) => {
             let resume_ty = crate::expr::expand_resume(&args.effects);
-            quote!(static move |_: #resume_ty| #body)
+            quote!(#[coroutine] static move |_: #resume_ty| #body)
         }
         None => {
             impl_effectless_handler = Some(quote! {

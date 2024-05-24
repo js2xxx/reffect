@@ -135,14 +135,14 @@ pub fn EffectList(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 #[proc_macro]
-#[allow_internal_unstable(coroutine_trait, coroutines)]
+#[allow_internal_unstable(coroutine_trait, coroutines, stmt_expr_attributes)]
 pub fn effectful_block(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let block = parse_macro_input!(input as block::EffectfulBlock);
     block::expand_block(block).into()
 }
 
 #[proc_macro_attribute]
-#[allow_internal_unstable(coroutine_trait, coroutines)]
+#[allow_internal_unstable(coroutine_trait, coroutines, stmt_expr_attributes)]
 pub fn effectful(
     args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
@@ -171,12 +171,14 @@ pub fn group(
 }
 
 #[proc_macro]
+#[allow_internal_unstable(coroutine_trait, coroutines, stmt_expr_attributes)]
 pub fn handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let handlers = parse_macro_input!(input as handler::Handlers);
     handler::expand_handlers(handlers).into()
 }
 
 #[proc_macro_attribute]
+#[allow_internal_unstable(coroutine_trait, coroutines, stmt_expr_attributes)]
 pub fn group_handler(
     args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,

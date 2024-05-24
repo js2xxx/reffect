@@ -449,7 +449,7 @@ pub fn expand_handlers(handlers: Handlers) -> TokenStream {
             let Args { is_move, effects, .. } = args;
             let resume_types = crate::expr::expand_resume(effects);
 
-            quote!(static #is_move |_: #resume_types| #body)
+            quote!(#[coroutine] static #is_move |_: #resume_types| #body)
         }
         None => body,
     };
