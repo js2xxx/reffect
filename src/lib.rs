@@ -1,14 +1,8 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
-#![deny(future_incompatible)]
-#![deny(rust_2018_idioms)]
-#![deny(rust_2024_compatibility)]
 #![feature(coroutines)]
 #![feature(coroutine_trait)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(lifetime_capture_rules_2024)]
-#![feature(macro_metavar_expr)]
-#![feature(noop_waker)]
+#![cfg_attr(test, feature(noop_waker))]
 
 pub mod adapter;
 pub mod effect;

@@ -178,7 +178,12 @@ pub fn handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 #[proc_macro_attribute]
-#[allow_internal_unstable(coroutine_trait, coroutines, stmt_expr_attributes)]
+#[allow_internal_unstable(
+    coroutine_trait,
+    coroutines,
+    impl_trait_in_assoc_type,
+    stmt_expr_attributes,
+)]
 pub fn group_handler(
     args: proc_macro::TokenStream,
     input: proc_macro::TokenStream,
@@ -195,6 +200,7 @@ pub fn group_handler(
 }
 
 #[proc_macro]
+#[allow_internal_unstable(coroutine_trait, coroutines)]
 pub fn catch(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let catch = parse_macro_input!(input as crate::expr::Catch);
     crate::expr::expand_catch(catch).into()

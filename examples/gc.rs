@@ -1,6 +1,4 @@
 #![feature(coroutines, coroutine_trait)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(lifetime_capture_rules_2024)]
 
 use std::{
     alloc::Layout,
