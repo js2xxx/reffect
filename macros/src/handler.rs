@@ -353,7 +353,7 @@ pub fn expand_handler_body(
         let iter = (heffects.iter().zip(heffect_pats)).zip(iter::repeat((&*guard, &*expr)));
         iter.map(|((effect, pat), (guard, expr))| {
             let success = quote! {{
-                #[warn(unreachable_code, clippy::diverging_sub_expression)]
+                #[warn(unreachable_code)]
                 let ret = #root_label: { #expr };
                 let tagged = <#effect as reffect::EffectExt>::tag(ret);
                 let sum = reffect::util::Sum::new_marked(tagged, #continue_marker);

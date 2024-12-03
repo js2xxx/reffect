@@ -135,9 +135,9 @@ mod test {
 
     #[test]
     fn test_async() {
-        struct AwaitOnce(bool);
+        struct YieldNow(bool);
 
-        impl Future for AwaitOnce {
+        impl Future for YieldNow {
             type Output = ();
 
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
@@ -152,7 +152,7 @@ mod test {
         }
 
         let fut = async {
-            AwaitOnce(false).await;
+            YieldNow(false).await;
             42
         };
 
