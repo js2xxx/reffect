@@ -1,5 +1,5 @@
 use core::{
-    future::{poll_fn, Future, IntoFuture},
+    future::{Future, IntoFuture, poll_fn},
     ops::{Coroutine, CoroutineState},
     pin::Pin,
     ptr::NonNull,
@@ -9,10 +9,10 @@ use core::{
 use pin_project::pin_project;
 
 use crate::{
+    Effect, Effectful,
     adapter::Begin,
     effect::{EffectExt, IntoCoroutine},
     util::Sum,
-    Effect, Effectful,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -127,7 +127,7 @@ where
 mod test {
     use core::{
         future::Future,
-        pin::{pin, Pin},
+        pin::{Pin, pin},
         task::{Context, Poll, Waker},
     };
 

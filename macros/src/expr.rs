@@ -1,10 +1,10 @@
 use std::borrow::Borrow;
 
 use proc_macro2::Span;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{
-    parse::Parse, parse_quote, parse_quote_spanned, spanned::Spanned, Expr, Ident, Pat, Stmt,
-    Token, Type,
+    Expr, Ident, Pat, Stmt, Token, Type, parse::Parse, parse_quote, parse_quote_spanned,
+    spanned::Spanned,
 };
 
 use crate::handler::Handler;

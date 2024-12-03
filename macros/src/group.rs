@@ -1,9 +1,9 @@
 use convert_case::{Case, Casing};
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{
-    parse_quote, parse_quote_spanned, spanned::Spanned, visit_mut::VisitMut, Ident, ItemImpl,
-    ItemTrait, Signature, TraitItemFn, Type, TypePath,
+    Ident, ItemImpl, ItemTrait, Signature, TraitItemFn, Type, TypePath, parse_quote,
+    parse_quote_spanned, spanned::Spanned, visit_mut::VisitMut,
 };
 
 use crate::{Args, Effect};
@@ -300,7 +300,7 @@ pub fn expand_group_handler(break_ty: Option<Type>, item: ItemImpl) -> syn::Resu
     let group_path = match trait_ {
         Some((None, path, _)) => path,
         Some((Some(tok), ..)) => {
-            return Err(syn::Error::new_spanned(tok, "unsupported negative impl"))
+            return Err(syn::Error::new_spanned(tok, "unsupported negative impl"));
         }
         None => return Err(syn::Error::new_spanned(impl_token, "expected trait impl")),
     };

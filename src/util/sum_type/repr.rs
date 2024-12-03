@@ -1,7 +1,7 @@
 use core::{convert::Infallible, mem::ManuallyDrop, ptr};
 
 use super::range::Count;
-use crate::util::tag::{Tag, UInt, UTerm, U1};
+use crate::util::tag::{Tag, U1, UInt, UTerm};
 
 pub struct Nil(pub(super) Infallible);
 
@@ -137,11 +137,7 @@ where
     type Substitute<T2> = (Head, Tail::Substitute<T2>);
 
     fn from_remainder(tag: u8) -> u8 {
-        if tag < UInt::<U>::VALUE {
-            tag
-        } else {
-            tag + 1
-        }
+        if tag < UInt::<U>::VALUE { tag } else { tag + 1 }
     }
 
     fn try_unwrap(tag: u8) -> Result<(), u8> {

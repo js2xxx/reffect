@@ -1,5 +1,5 @@
 use core::{
-    any::{type_name, TypeId},
+    any::{TypeId, type_name},
     fmt,
     hash::Hasher,
     mem::ManuallyDrop,

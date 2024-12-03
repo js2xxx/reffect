@@ -7,9 +7,9 @@ use core::{
 use crate::{
     adapter::Begin,
     util::{
+        Sum,
         sum_type::{range::SplitList, repr::SumList},
         tag::UTerm,
-        Sum,
     },
 };
 
@@ -120,7 +120,8 @@ where
     E: EffectList,
     F: EffectList,
 {
-    type Catcher<'a> = H::Catcher<'a>
+    type Catcher<'a>
+        = H::Catcher<'a>
     where
         Self: 'a;
 
@@ -135,7 +136,8 @@ where
     E: EffectList,
     F: EffectList,
 {
-    type Catcher<'a> = H::Catcher<'a>
+    type Catcher<'a>
+        = H::Catcher<'a>
     where
         Self: 'a;
 
@@ -234,7 +236,10 @@ where
     E: EffectList,
     F: EffectList,
 {
-    type Catcher<'a> = H where C: 'a;
+    type Catcher<'a>
+        = H
+    where
+        C: 'a;
 
     fn catch(mut self: Pin<&mut Self>, effect: Sum<E>) -> Self::Catcher<'_> {
         self(effect)

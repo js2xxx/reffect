@@ -7,17 +7,17 @@ use core::{
 };
 
 pub use self::{
-    catch::{catch, catch0, catch1, Catch, Catch0, Catch1},
-    handle::{handle, Handle},
+    catch::{Catch, Catch0, Catch1, catch, catch0, catch1},
+    handle::{Handle, handle},
 };
 use crate::{
     effect::{Catcher, EffectList, Effectful},
     util::{
-        sum_type::{
-            range::{ContainsList, SplitList},
-            NarrowRem,
-        },
         ConcatList, Sum,
+        sum_type::{
+            NarrowRem,
+            range::{ContainsList, SplitList},
+        },
     },
 };
 
@@ -49,7 +49,6 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
     ) -> Catch<'h, Self, C, CM, Y, E, HY, OY, MULists>
     where
         C: Catcher<Self::Return, E, HY, CM> + 'h,
-
         E: EffectList,
         Y: EffectList,
         HY: EffectList,
@@ -63,10 +62,8 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
     ) -> Catch0<'h, Self, C, CM, Y, E, HY, EUL, RemEUL, HUL>
     where
         C: Catcher<Self::Return, E, HY, CM> + 'h,
-
         E: EffectList,
         HY: EffectList,
-
         Y: EffectList + ContainsList<E, EUL, RemEUL> + SplitList<HY, HUL>,
         Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL> + SplitList<HY::ResumeList, HUL>,
     {
@@ -79,11 +76,9 @@ pub trait EffectfulExt<Y: EffectList>: Effectful<Y> + Sized {
     ) -> Catch1<'h, Self, C, CM, Y, E, HY, EUL, RemEUL>
     where
         C: Catcher<Self::Return, E, HY, CM> + 'h,
-
         E: EffectList,
         HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
         HY::ResumeList: ConcatList<NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
-
         Y: EffectList + ContainsList<E, EUL, RemEUL>,
         Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
     {
@@ -105,8 +100,8 @@ mod test {
 
     use super::{Begin, EffectfulExt};
     use crate::{
-        self as reffect, effectful, effectful_block, handler, util::Sum, Effect, EffectList,
-        Effectful,
+        self as reffect, Effect, EffectList, Effectful, effectful, effectful_block, handler,
+        util::Sum,
     };
 
     struct Eff1(u32);

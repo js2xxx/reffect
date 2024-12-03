@@ -3,12 +3,12 @@ pub mod tag;
 
 use core::{any::type_name, marker::PhantomData};
 
-pub use self::sum_type::{range::ConcatList, Sum};
+pub use self::sum_type::{Sum, range::ConcatList};
 use self::sum_type::{range::SplitList, repr::SumList};
 use crate::{
+    Effect,
     adapter::Begin,
     effect::{EffectList, ResumeTy},
-    Effect,
 };
 
 pub fn mark<T: ?Sized>(_: &T) -> PhantomData<T> {

@@ -1,7 +1,6 @@
 #![feature(coroutines, coroutine_trait)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(lifetime_capture_rules_2024)]
-#![feature(strict_provenance)]
 
 use std::{
     alloc::Layout,
@@ -14,14 +13,13 @@ use std::{
 };
 
 use reffect::{
-    catch,
+    Effect, Effectful, EffectfulExt, catch,
     effect::{EffectList, ResumeTy},
     effectful, effectful_block,
     util::{
-        sum_type::{range::SplitList, repr::Split, Rem, RemTags},
+        sum_type::{Rem, RemTags, range::SplitList, repr::Split},
         tag::Tag,
     },
-    Effect, Effectful, EffectfulExt,
 };
 
 #[repr(transparent)]
@@ -109,14 +107,12 @@ unsafe trait Collector {
 trait CollectExt<E, U>: Effectful<E> + Sized
 where
     E: EffectList + Split<Alloc, U>,
-
     E::ResumeList: Split<ResumeTy<Alloc>, U, Remainder = <Rem<E, Alloc, U> as EffectList>::ResumeList>
         + SplitList<
             Rem<E::ResumeList, ResumeTy<Alloc>, U>,
             RemTags<E::ResumeList, ResumeTy<Alloc>, U>,
         >,
     U: Tag,
-
     Rem<E, Alloc, U>: EffectList,
 {
     #[effectful(static; ...Rem<E, Alloc, U>)]
@@ -162,14 +158,12 @@ impl<Coro, E, U> CollectExt<E, U> for Coro
 where
     Coro: Effectful<E>,
     E: EffectList + Split<Alloc, U>,
-
     E::ResumeList: Split<ResumeTy<Alloc>, U, Remainder = <Rem<E, Alloc, U> as EffectList>::ResumeList>
         + SplitList<
             Rem<E::ResumeList, ResumeTy<Alloc>, U>,
             RemTags<E::ResumeList, ResumeTy<Alloc>, U>,
         >,
     U: Tag,
-
     Rem<E, Alloc, U>: EffectList,
 {
 }
@@ -205,9 +199,9 @@ unsafe impl Collector for SimpleCollector {
         }
 
         let ptr = if alloc.zero {
-            std::alloc::alloc_zeroed(alloc.layout)
+            unsafe { std::alloc::alloc_zeroed(alloc.layout) }
         } else {
-            std::alloc::alloc(alloc.layout)
+            unsafe { std::alloc::alloc(alloc.layout) }
         };
         let ptr = NonNull::new(ptr.cast())?;
         println!("allocated {:?} of size {:?}", ptr, alloc.layout.size());

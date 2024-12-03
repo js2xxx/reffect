@@ -74,9 +74,7 @@ impl<SubHead, SubTail, SuperHead, SuperTail, HeadTag: Tag, TailTag>
 where
     SubTail: SumList,
     SuperTail: SumList,
-
     (SuperHead, SuperTail): Split<SubHead, HeadTag>,
-
     <(SuperHead, SuperTail) as Split<SubHead, HeadTag>>::Remainder: SplitList<SubTail, TailTag>,
 {
     type Remainder =

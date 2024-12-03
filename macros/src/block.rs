@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{parse::Parse, visit_mut::VisitMut, Attribute, Stmt};
+use syn::{Attribute, Stmt, parse::Parse, visit_mut::VisitMut};
 
 use crate::{Args, DesugarExpr};
 

@@ -10,7 +10,7 @@ mod handler;
 
 use proc_macro2::Span;
 use quote::ToTokens;
-use syn::{parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned, Token};
+use syn::{Token, parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned};
 
 #[derive(Clone, PartialEq, Eq)]
 enum Effect {

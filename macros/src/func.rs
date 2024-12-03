@@ -2,7 +2,7 @@ use std::mem;
 
 use proc_macro2::TokenStream;
 use quote::format_ident;
-use syn::{parse_quote, spanned::Spanned, visit_mut::VisitMut, Error, Ident, ItemFn};
+use syn::{Error, Ident, ItemFn, parse_quote, spanned::Spanned, visit_mut::VisitMut};
 
 use crate::{Args, DesugarExpr};
 

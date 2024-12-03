@@ -5,7 +5,7 @@ use core::{
         Coroutine,
         CoroutineState::{self, *},
     },
-    pin::{pin, Pin},
+    pin::{Pin, pin},
 };
 
 use pin_project::pin_project;
@@ -14,12 +14,12 @@ use super::Begin;
 use crate::{
     effect::{EffectList, Effectful, Handler},
     util::{
+        Sum,
         sum_type::{
-            range::{ContainsList, SplitList},
             NarrowRem,
+            range::{ContainsList, SplitList},
         },
         tag::U1,
-        Sum,
     },
 };
 
@@ -47,12 +47,9 @@ impl<Coro, Y, H, HM, E, RemUL, UL>
 where
     Coro: Effectful<Y>,
     H: Handler<Coro::Return, E, HM>,
-
     Y: EffectList + ContainsList<E, UL, RemUL>,
     E: EffectList,
-
     NarrowRem<Y, E, UL>: EffectList<ResumeList = NarrowRem<Y::ResumeList, E::ResumeList, UL>>,
-
     Y::ResumeList: ContainsList<E::ResumeList, UL, RemUL>,
     (Begin, Y::ResumeList): SplitList<Y::ResumeList, Y::Tags<U1>>,
 {

@@ -2,14 +2,14 @@ use std::iter;
 
 use convert_case::{Case, Casing};
 use proc_macro2::{Span, TokenStream};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{
+    Expr, Ident, Lifetime, Pat, Token, Type,
     parse::Parse,
     parse_quote,
     spanned::Spanned,
     visit::{self, Visit},
     visit_mut::{self, VisitMut},
-    Expr, Ident, Lifetime, Pat, Token, Type,
 };
 
 use crate::Args;

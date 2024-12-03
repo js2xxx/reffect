@@ -5,25 +5,24 @@ use core::{
         Coroutine,
         CoroutineState::{self, *},
     },
-    pin::{pin, Pin},
+    pin::{Pin, pin},
 };
 
 use pin_project::pin_project;
 
 use crate::{
+    Effectful,
     adapter::Begin,
     effect::{Catcher, EffectList},
     util::{
-        narrow_effect_prefixed,
+        ConcatList, Sum, narrow_effect_prefixed,
         sum_type::{
+            NarrowRem,
             range::{ContainsList, Count, SplitList},
             repr::SumList,
-            NarrowRem,
         },
-        tag::{UTerm, U1},
-        ConcatList, Sum,
+        tag::{U1, UTerm},
     },
-    Effectful,
 };
 
 pub fn catch<'h, Coro, C, CM, Y, E, HY, OY, MULists>(
@@ -33,7 +32,6 @@ pub fn catch<'h, Coro, C, CM, Y, E, HY, OY, MULists>(
 where
     Coro: Effectful<Y>,
     C: Catcher<Coro::Return, E, HY, CM> + 'h,
-
     E: EffectList,
     Y: EffectList,
     HY: EffectList,
@@ -52,7 +50,6 @@ pub struct Catch<'h, Coro, C, CM, Y, E, HY, OY, MULists>
 where
     Coro: Effectful<Y>,
     C: Catcher<Coro::Return, E, HY, CM> + 'h,
-
     E: EffectList,
     Y: EffectList,
     HY: EffectList,
@@ -77,15 +74,12 @@ impl<'h, Coro, C, CM, Y, E, HY, OY, EUL, RemEUL, HOUL, OUL> Coroutine<Sum<(Begin
 where
     Coro: Effectful<Y>,
     C: Catcher<Coro::Return, E, HY, CM> + 'h,
-
     E: EffectList,
     HY: EffectList,
     NarrowRem<Y, E, EUL>: EffectList<ResumeList = NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
-
     Y: EffectList + ContainsList<E, EUL, RemEUL>,
     Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
     (Begin, Y::ResumeList): SplitList<Y::ResumeList, Y::Tags<U1>>,
-
     OY: EffectList + SplitList<HY, HOUL> + SplitList<NarrowRem<Y, E, EUL>, OUL>,
     OY::ResumeList: SplitList<HY::ResumeList, HOUL>
         + SplitList<NarrowRem<Y::ResumeList, E::ResumeList, EUL>, OUL>,
@@ -162,10 +156,8 @@ pub fn catch0<'h, Coro, C, CM, E, Y, HY, EUL, RemEUL, HUL>(
 where
     Coro: Effectful<Y>,
     C: Catcher<Coro::Return, E, HY, CM> + 'h,
-
     E: EffectList,
     HY: EffectList,
-
     Y: EffectList + ContainsList<E, EUL, RemEUL> + SplitList<HY, HUL>,
     Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL> + SplitList<HY::ResumeList, HUL>,
 {
@@ -196,11 +188,9 @@ pub fn catch1<'h, Coro, C, CM, E, Y, HY, EUL, RemEUL>(
 where
     Coro: Effectful<Y>,
     C: Catcher<Coro::Return, E, HY, CM> + 'h,
-
     E: EffectList,
     HY: EffectList + ConcatList<NarrowRem<Y, E, EUL>>,
     HY::ResumeList: ConcatList<NarrowRem<Y::ResumeList, E::ResumeList, EUL>>,
-
     Y: EffectList + ContainsList<E, EUL, RemEUL>,
     Y::ResumeList: ContainsList<E::ResumeList, EUL, RemEUL>,
 {
