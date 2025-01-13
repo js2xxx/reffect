@@ -2,11 +2,12 @@
 #![no_std]
 #![feature(coroutines)]
 #![feature(coroutine_trait)]
-#![cfg_attr(test, feature(noop_waker))]
+#![feature(gen_blocks)]
 
 pub mod adapter;
 pub mod effect;
 pub mod future;
+pub mod iter;
 pub mod util;
 
 #[cfg(test)]

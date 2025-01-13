@@ -182,7 +182,7 @@ pub fn handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     coroutine_trait,
     coroutines,
     impl_trait_in_assoc_type,
-    stmt_expr_attributes,
+    stmt_expr_attributes
 )]
 pub fn group_handler(
     args: proc_macro::TokenStream,
