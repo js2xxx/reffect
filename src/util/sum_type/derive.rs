@@ -142,52 +142,54 @@ where
     }
 }
 
-pub(super) trait SumPartialEq: SumList {
-    unsafe fn eq(this: &Self::Repr, other: &Self::Repr, tag: u8) -> bool;
+pub(super) trait SumPartialEq<Other: SumList + ?Sized = Self>: SumList {
+    unsafe fn eq(this: &Self::Repr, other: &Other::Repr, tag: u8) -> bool;
 }
 
-impl SumPartialEq for () {
+impl SumPartialEq<()> for () {
     unsafe fn eq(_: &Self::Repr, _: &Self::Repr, _: u8) -> bool {
         true
     }
 }
 
-impl<Head, Tail> SumPartialEq for (Head, Tail)
+impl<Head, Tail, OHead, OTail> SumPartialEq<(OHead, OTail)> for (Head, Tail)
 where
-    Head: PartialEq,
-    Tail: SumPartialEq,
+    Head: PartialEq<OHead>,
+    Tail: SumPartialEq<OTail>,
+    OTail: SumList,
 {
-    unsafe fn eq(this: &Self::Repr, other: &Self::Repr, tag: u8) -> bool {
+    unsafe fn eq(this: &Self::Repr, other: &<(OHead, OTail) as SumList>::Repr, tag: u8) -> bool {
         if tag == 0 {
-            unsafe { this.data == other.data }
+            unsafe { *this.data == *other.data }
         } else {
             unsafe { Tail::eq(&this.next, &other.next, tag - 1) }
         }
     }
 }
 
-pub(super) trait SumPartialOrd: SumList + SumPartialEq {
+pub(super) trait SumPartialOrd<Other: SumList + ?Sized = Self>: SumPartialEq<Other> {
     unsafe fn partial_cmp(
         this: &Self::Repr,
-        other: &Self::Repr,
+        other: &Other::Repr,
         tag: u8,
     ) -> Option<core::cmp::Ordering>;
 }
 
-impl SumPartialOrd for () {
+impl SumPartialOrd<()> for () {
     unsafe fn partial_cmp(_: &Self::Repr, _: &Self::Repr, _: u8) -> Option<core::cmp::Ordering> {
         Some(core::cmp::Ordering::Equal)
     }
 }
 
-impl<Head, Tail> SumPartialOrd for (Head, Tail)
+impl<Head, Tail, OHead, OTail> SumPartialOrd<(OHead, OTail)> for (Head, Tail)
 where
-    Head: PartialOrd,
-    Tail: SumPartialOrd,
+    Head: PartialOrd<OHead>,
+    Tail: SumPartialOrd<OTail>,
+    OTail: SumList,
 {
     unsafe fn partial_cmp(
         this: &Self::Repr,
-        other: &Self::Repr,
+        other: &<(OHead, OTail) as SumList>::Repr,
         tag: u8,
     ) -> Option<core::cmp::Ordering> {
         if tag == 0 {

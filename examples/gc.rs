@@ -216,7 +216,7 @@ unsafe impl Collector for SimpleCollector {
 
     unsafe fn mark(&mut self, address: NonZeroUsize) {
         if let Some(data) = self.map.get_mut(&address) {
-            println!("marking {:#x}", address);
+            println!("marking {address:#x}");
             data.ref_count += 1;
         }
     }

@@ -240,16 +240,16 @@ impl<S: derive::SumClone> Clone for Sum<S> {
     }
 }
 
-impl<S: derive::SumPartialEq> PartialEq for Sum<S> {
-    fn eq(&self, other: &Self) -> bool {
+impl<S: derive::SumPartialEq<T>, T: repr::SumList> PartialEq<Sum<T>> for Sum<S> {
+    fn eq(&self, other: &Sum<T>) -> bool {
         self.tag == other.tag && unsafe { S::eq(&self.data, &other.data, self.tag) }
     }
 }
 
 impl<S: derive::SumPartialEq + Eq> Eq for Sum<S> {}
 
-impl<S: derive::SumPartialOrd> PartialOrd for Sum<S> {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+impl<S: derive::SumPartialOrd<T>, T: repr::SumList> PartialOrd<Sum<T>> for Sum<S> {
+    fn partial_cmp(&self, other: &Sum<T>) -> Option<core::cmp::Ordering> {
         match self.tag.cmp(&other.tag) {
             core::cmp::Ordering::Equal => unsafe {
                 S::partial_cmp(&self.data, &other.data, self.tag)

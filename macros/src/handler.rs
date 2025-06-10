@@ -113,14 +113,14 @@ impl Visit<'_> for HandlerPat {
 
             Pat::Paren(_) => visit::visit_pat(self, i),
             Pat::Or(_) => {
-                if !self.is_in_subpat {
-                    if let Some(pi) = self.root_ident.take() {
-                        self.err = Some(syn::Error::new_spanned(
-                            pi,
-                            "root ident bindings on different effects are not supported",
-                        ));
-                        return;
-                    }
+                if !self.is_in_subpat
+                    && let Some(pi) = self.root_ident.take()
+                {
+                    self.err = Some(syn::Error::new_spanned(
+                        pi,
+                        "root ident bindings on different effects are not supported",
+                    ));
+                    return;
                 }
                 visit::visit_pat(self, i)
             }
@@ -286,13 +286,13 @@ impl Parse for Handlers {
             handlers.push(input.parse()?);
         }
 
-        if let Some(ref args) = args {
-            if args.is_static.is_some() {
-                return Err(syn::Error::new_spanned(
-                    args.is_static,
-                    "effectful handlers are immovable by default",
-                ));
-            }
+        if let Some(ref args) = args
+            && args.is_static.is_some()
+        {
+            return Err(syn::Error::new_spanned(
+                args.is_static,
+                "effectful handlers are immovable by default",
+            ));
         }
 
         Ok(Handlers {
