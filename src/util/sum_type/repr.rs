@@ -79,13 +79,13 @@ where
     }
 
     fn as_ptr(this: &Self::Repr) -> *const Head {
-        let ptr = unsafe { ptr::addr_of!(this.data).cast::<Head>() };
+        let ptr = ptr::addr_of!(this.data).cast::<Head>();
         debug_assert_eq!(ptr.cast(), this as _);
         ptr
     }
 
     fn as_mut_ptr(this: &mut Self::Repr) -> *mut Head {
-        let ptr = unsafe { ptr::addr_of_mut!(this.data).cast::<Head>() };
+        let ptr = ptr::addr_of_mut!(this.data).cast::<Head>();
         debug_assert_eq!(ptr.cast(), this as _);
         ptr
     }

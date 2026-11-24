@@ -5,7 +5,7 @@ use core::{
         Coroutine,
         CoroutineState::{self, *},
     },
-    pin::{Pin, pin},
+    pin::Pin,
 };
 
 use pin_project::pin_project;
@@ -56,16 +56,18 @@ where
 {
     #[pin]
     coro: Coro,
-    // `handler` must be dropped before `catcher` since it is actually borrowed from it.
+    // `handler` must be dropped before `catcher` since it is actually borrowed
+    // from it.
     //
-    // Note: struct fields are dropped in the same order as declared in the struct
-    // (source-code-wise, not memory-layout-wise).
+    // Note: struct fields are dropped in the same order as declared in the
+    // struct (source-code-wise, not memory-layout-wise).
     #[pin]
     handler: Option<C::Catcher<'h>>,
     #[pin]
     catcher: C,
     markers: PhantomData<(Y, E, HY, OY, MULists)>,
-    // This struct must be pinned, since it contains a self-referential field (`handler`).
+    // This struct must be pinned, since it contains a self-referential field
+    // (`handler`).
     pinned: PhantomPinned,
 }
 
@@ -104,8 +106,8 @@ where
                     Complete(Continue(ret)) => ret.broaden(),
                     Complete(Break(ret)) => return Complete(ret),
                 };
-                // We may access `catcher` in the following code, so `handler` must be dropped
-                // first.
+                // We may access `catcher` in the following code, so `handler`
+                // must be dropped first.
                 proj.handler.set(None);
                 state.broaden()
             }
@@ -116,13 +118,15 @@ where
             state = match proj.coro.as_mut().resume(state) {
                 Yielded(y) => match y.narrow() {
                     Ok(eff) => {
-                        // SAFETY: The handler is actually mutably borrowed from `catcher`, which
-                        // indicates that:
+                        // SAFETY: The handler is actually mutably borrowed from
+                        // `catcher`, which indicates that:
                         //
                         // 1. `catcher` must not be dropped before `handler`.
-                        // 2. `catcher` must not be accessed when `handler` is alive in the scope.
+                        // 2. `catcher` must not be accessed when `handler` is
+                        //    alive in the scope.
                         //
-                        // Thus, we can safely extend its lifetime to almost `'h`.
+                        // Thus, we can safely extend its lifetime to almost
+                        // `'h`.
                         let handler: C::Catcher<'h> =
                             unsafe { core::mem::transmute(proj.catcher.as_mut().catch(eff)) };
                         proj.handler.set(Some(handler));
@@ -133,8 +137,8 @@ where
                             Complete(Continue(ret)) => ret.broaden(),
                             Complete(Break(ret)) => break Complete(ret),
                         };
-                        // We may access `catcher` in the next iteration of the loop, so `handler`
-                        // must be dropped first.
+                        // We may access `catcher` in the next iteration of the
+                        // loop, so `handler` must be dropped first.
                         proj.handler.set(None);
                         state.broaden()
                     }

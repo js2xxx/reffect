@@ -5,7 +5,7 @@ use core::{
         Coroutine,
         CoroutineState::{self, *},
     },
-    pin::{Pin, pin},
+    pin::Pin,
 };
 
 use pin_project::pin_project;

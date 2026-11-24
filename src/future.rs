@@ -65,8 +65,8 @@ where
                 Ok(ty) => ty,
                 Err(_) => return CoroutineState::Yielded(Sum::new(Async)),
             };
-            // SAFETY: The reference is guaranteed to be valid for the span of this polling
-            // lifetime.
+            // SAFETY: The reference is guaranteed to be valid for the span of
+            // this polling lifetime.
             match fut.poll(unsafe { resume_ty.0.as_mut() }) {
                 Poll::Ready(ret) => CoroutineState::Complete(ret),
                 Poll::Pending => CoroutineState::Yielded(Sum::new(Async)),
@@ -111,7 +111,8 @@ where
     where
         Coro: Effectful<(Async, ()), Return = T>,
     {
-        // SAFETY: The reference is guaranteed to be valid for the span of this polling.
+        // SAFETY: The reference is guaranteed to be valid for the span of this
+        // polling.
         let state = Sum::new(Async::tag(unsafe { ResumeTy::new(cx) }));
         match coro.as_mut().resume(state) {
             CoroutineState::Yielded(_) => Poll::Pending,
