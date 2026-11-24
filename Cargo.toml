@@ -1,13 +1,13 @@
 [package]
-edition = "2024"
 name = "reffect"
 version = "0.1.0"
-
-[dependencies]
-reffect-macros = {path = "macros"}
-
-pin-project = "1.1"
+edition = "2024"
 
 [workspace]
+resolver = "3"
 members = ["macros"]
-resolver = "2"
+
+[dependencies]
+reffect-macros = { path = "macros" }
+
+pin-project = "1.1"
