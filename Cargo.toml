@@ -10,4 +10,5 @@ members = ["macros"]
 [dependencies]
 reffect-macros = { path = "macros" }
 
+futures-core = { version = "0.3", default-features = false }
 pin-project = "1.1"

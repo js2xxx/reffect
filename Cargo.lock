@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures-core"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e"
+
+[[package]]
 name = "pin-project"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -53,6 +59,7 @@ dependencies = [
 name = "reffect"
 version = "0.1.0"
 dependencies = [
+ "futures-core",
  "pin-project",
  "reffect-macros",
 ]

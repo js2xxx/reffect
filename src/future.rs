@@ -1,5 +1,6 @@
 use core::{
-    future::{Future, IntoFuture, poll_fn},
+    future::{Future, IntoFuture},
+    marker::PhantomData,
     ops::{Coroutine, CoroutineState},
     pin::Pin,
     ptr::NonNull,
@@ -23,7 +24,7 @@ impl Effect for Async {
 }
 
 #[derive(Debug)]
-pub struct ResumeTy(NonNull<Context<'static>>);
+pub struct ResumeTy(pub(crate) NonNull<Context<'static>>);
 
 impl ResumeTy {
     /// # Safety
@@ -103,25 +104,31 @@ where
     }
 }
 
-pub async fn run<Coro, T>(coro: Coro) -> T
+pub fn run<Coro, T>(coro: Coro) -> impl Future<Output = T>
 where
     Coro: Effectful<(Async, ()), Return = T>,
 {
-    fn poll<Coro, T>(mut coro: Pin<&mut Coro>, cx: &mut Context<'_>) -> Poll<T>
+    #[pin_project]
+    struct CoroFuture<Coro, T>(#[pin] Coro, PhantomData<T>);
+    impl<Coro, T> Future for CoroFuture<Coro, T>
     where
         Coro: Effectful<(Async, ()), Return = T>,
     {
-        // SAFETY: The reference is guaranteed to be valid for the span of this
-        // polling.
-        let state = Sum::new(Async::tag(unsafe { ResumeTy::new(cx) }));
-        match coro.as_mut().resume(state) {
-            CoroutineState::Yielded(_) => Poll::Pending,
-            CoroutineState::Complete(ret) => Poll::Ready(ret),
+        type Output = T;
+
+        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T> {
+            let coro = self.project().0;
+            // SAFETY: The reference is guaranteed to be valid for the span of
+            // this polling.
+            let state = Sum::new(Async::tag(unsafe { ResumeTy::new(cx) }));
+            match coro.resume(state) {
+                CoroutineState::Yielded(_) => Poll::Pending,
+                CoroutineState::Complete(ret) => Poll::Ready(ret),
+            }
         }
     }
 
-    let mut coro = core::pin::pin!(coro);
-    poll_fn(|cx| poll(coro.as_mut(), cx)).await
+    CoroFuture(coro, PhantomData)
 }
 
 #[cfg(test)]

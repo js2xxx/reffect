@@ -6,8 +6,11 @@
 
 pub mod adapter;
 pub mod effect;
+
 pub mod future;
 pub mod iter;
+pub mod stream;
+
 pub mod util;
 
 #[cfg(test)]
